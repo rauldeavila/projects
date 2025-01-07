@@ -128,7 +128,7 @@ struct TaskListView: View {
                     fontSize: baseTitleSize * zoomLevel,
                     statusFontSize: baseStatusSize * zoomLevel
                 )
-                .background(viewModel.selectedItemId == item.id ? Color.accentColor.opacity(0.1) : Color.clear)
+                .background(viewModel.selectedItemId == item.id ? Color.accentColor.opacity(0.5) : Color.clear)
             }
             
             Group {
