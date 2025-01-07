@@ -103,6 +103,15 @@ class TaskListViewModel: ObservableObject {
 struct TaskListView: View {
     @StateObject private var viewModel = TaskListViewModel()
     @FocusState private var isNewItemFieldFocused: Bool
+    @SceneStorage("zoomLevel") private var zoomLevel: Double = 1.0
+    
+    private let minZoom: Double = 0.5
+    private let maxZoom: Double = 2.0
+    private let zoomStep: Double = 0.1
+    
+    private let baseTitleSize: Double = 13.0
+    private let baseStatusSize: Double = 11.0
+    private let baseNewItemSize: Double = 13.0
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -115,7 +124,9 @@ struct TaskListView: View {
                     onTitleChange: { newTitle in
                         viewModel.updateItemTitle(item.id, newTitle: newTitle)
                         isNewItemFieldFocused = true
-                    }
+                    },
+                    fontSize: baseTitleSize * zoomLevel,
+                    statusFontSize: baseStatusSize * zoomLevel
                 )
                 .background(viewModel.selectedItemId == item.id ? Color.accentColor.opacity(0.1) : Color.clear)
             }
@@ -140,12 +151,28 @@ struct TaskListView: View {
                     .keyboardShortcut(.rightArrow, modifiers: [.command])
                     .opacity(0)
                     .frame(maxWidth: 0, maxHeight: 0)
+                
+                Button("Zoom In") {
+                    zoomLevel = min(maxZoom, zoomLevel + zoomStep)
+                }
+                .keyboardShortcut(KeyboardShortcut("=", modifiers: .command))
+                .opacity(0)
+                .frame(maxWidth: 0, maxHeight: 0)
+                
+                // Zoom out shortcut
+                Button("Zoom Out") {
+                    zoomLevel = max(minZoom, zoomLevel - zoomStep)
+                }
+                .keyboardShortcut(KeyboardShortcut("-", modifiers: .command))
+                .opacity(0)
+                .frame(maxWidth: 0, maxHeight: 0)
             }
             
             // New item field
             if viewModel.editingItemId == nil {
                 TextField("New item...", text: $viewModel.newItemText)
                     .textFieldStyle(.plain)
+                    .font(.system(size: baseNewItemSize * zoomLevel)) // Adiciona o zoom da fonte aqui
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                     .focused($isNewItemFieldFocused)
@@ -183,15 +210,20 @@ struct CustomTextField: NSViewRepresentable {
     @Binding var text: String
     let onSubmit: () -> Void
     let cursorPosition: TaskListViewModel.EditDirection
+    let fontSize: Double
     
-    // Add state to track if we've positioned the cursor
     @State private var hasPositionedCursor = false
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
     
     class Coordinator: NSObject, NSTextFieldDelegate {
         var parent: CustomTextField
         
         init(_ parent: CustomTextField) {
             self.parent = parent
+            super.init()
         }
         
         func controlTextDidChange(_ obj: Notification) {
@@ -202,17 +234,16 @@ struct CustomTextField: NSViewRepresentable {
         
         func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
             if commandSelector == #selector(NSResponder.insertNewline(_:)) {
-                parent.onSubmit()
-                // Remove o foco do campo após submeter
+                // Primeiro removemos o foco
                 control.window?.makeFirstResponder(nil)
+                // Depois chamamos o onSubmit
+                DispatchQueue.main.async {
+                    self.parent.onSubmit()
+                }
                 return true
             }
             return false
         }
-    }
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
     }
     
     func makeNSView(context: Context) -> NSTextField {
@@ -221,13 +252,14 @@ struct CustomTextField: NSViewRepresentable {
         textField.focusRingType = .none
         textField.drawsBackground = false
         textField.isBezeled = false
+        textField.font = .systemFont(ofSize: fontSize)
         return textField
     }
     
     func updateNSView(_ nsView: NSTextField, context: Context) {
         nsView.stringValue = text
+        nsView.font = .systemFont(ofSize: fontSize)
         
-        // Only position cursor if we haven't done it yet
         if !hasPositionedCursor {
             DispatchQueue.main.async {
                 guard let window = nsView.window else { return }
@@ -241,7 +273,6 @@ struct CustomTextField: NSViewRepresentable {
                         fieldEditor.selectedRange = NSRange(location: text.count, length: 0)
                     }
                 }
-                // Mark that we've positioned the cursor
                 hasPositionedCursor = true
             }
         }
@@ -254,33 +285,37 @@ struct ItemRowView: View {
     let isSelected: Bool
     let isEditing: Bool
     let editingDirection: TaskListViewModel.EditDirection
-    var onTitleChange: (String) -> Void
+    let onTitleChange: (String) -> Void
+    let fontSize: Double
+    let statusFontSize: Double
     
     @State private var editingTitle: String = ""
     @State private var statusScale: Double = 1.0
     
     var body: some View {
         HStack(spacing: 8) {
-            // Status indicator
+            // Status indicator com tamanho de fonte ajustável
             Text(item.status.rawValue)
-                .font(.system(.caption, design: .monospaced))
+                .font(.system(size: statusFontSize, design: .monospaced))
                 .padding(.horizontal, 4)
                 .padding(.vertical, 2)
                 .background(statusColor.opacity(0.2))
                 .cornerRadius(4)
                 .scaleEffect(statusScale)
             
-            // Title with editing mode
+            // Title com tamanho de fonte ajustável
             if isEditing {
                 CustomTextField(
                     text: $editingTitle,
                     onSubmit: { onTitleChange(editingTitle) },
-                    cursorPosition: editingDirection
+                    cursorPosition: editingDirection,
+                    fontSize: fontSize
                 )
                 .onAppear { editingTitle = item.title }
                 .padding(.leading, CGFloat(item.nestingLevel) * 20)
             } else {
                 Text(item.title)
+                    .font(.system(size: fontSize))
                     .padding(.leading, CGFloat(item.nestingLevel) * 20)
             }
         }
