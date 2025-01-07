@@ -114,6 +114,7 @@ struct TaskListView: View {
                     editingDirection: viewModel.editingDirection,
                     onTitleChange: { newTitle in
                         viewModel.updateItemTitle(item.id, newTitle: newTitle)
+                        isNewItemFieldFocused = true
                     }
                 )
                 .background(viewModel.selectedItemId == item.id ? Color.accentColor.opacity(0.1) : Color.clear)
