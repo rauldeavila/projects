@@ -89,6 +89,29 @@ struct Item: Identifiable, Codable {
         subItems == nil || subItems?.isEmpty == true
     }
     
+    /// Updates status based on current hierarchy position and children
+    mutating func updateStatusBasedOnHierarchy() {
+        // If has children, should be a project or subproject
+        if !isTask {
+            if nestingLevel == 1 {
+                status = status == .done ? .done : .proj
+            } else if nestingLevel == 2 {
+                status = status == .done ? .done : .subProj
+            }
+        }
+        
+        // If all children are done, mark as done
+        if !isTask, let subItems = subItems, !subItems.isEmpty {
+            let allChildrenDone = subItems.allSatisfy { $0.status == .done }
+            if allChildrenDone {
+                status = .done
+            } else if status == .done {
+                // If any child is not done, parent can't be done
+                status = nestingLevel == 1 ? .proj : .subProj
+            }
+        }
+    }
+    
     /// Returns true if this item is a project (has sub-items)
     var isProject: Bool {
         !isTask && nestingLevel == 1

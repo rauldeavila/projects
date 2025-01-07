@@ -7,6 +7,7 @@ class TaskListViewModel: ObservableObject {
     @Published var newItemText: String = ""
     @Published var selectedItemId: UUID?
     @Published var editingDirection: EditDirection = .right
+    @Published var shakeSelected: Bool = false
     
     // Status groups for cycling
     private let taskStatuses: [ItemStatus] = [.todo, .doing, .someday, .maybe, .future, .done]
@@ -97,6 +98,97 @@ class TaskListViewModel: ObservableObject {
         newItemText = ""
         editingItemId = nil  // Garante que saímos do modo de edição
     }
+    
+    // MARK: - Indentation Functions
+        
+    func indentSelectedItem() {
+        guard let currentIndex = currentIndex, currentIndex > 0 else {
+            showShakeAnimation()
+            return
+        }
+        
+        var currentItem = items[currentIndex]
+        var parentItem = items[currentIndex - 1]
+        
+        // Check if adding would exceed max nesting level
+        if parentItem.nestingLevel >= Item.maxNestingLevel - 1 {
+            showShakeAnimation()
+            return
+        }
+        
+        do {
+            // Remove item from current position
+            if parentItem.isTask {
+                parentItem.status = parentItem.nestingLevel == 0 ? .proj : .subProj
+                parentItem.touch() // Força atualização
+            }
+            
+            items.remove(at: currentIndex)
+            
+            // Add as child of parent
+            try parentItem.addSubItem(currentItem)
+            
+            // Update parent status if needed
+            
+            // Update in items array
+            items[currentIndex - 1] = parentItem
+
+            
+        } catch {
+            // Restore item if operation failed
+            items.insert(currentItem, at: currentIndex)
+            showShakeAnimation()
+        }
+    }
+
+    func dedentSelectedItem() {
+        guard let currentIndex = currentIndex else {
+            showShakeAnimation()
+            return
+        }
+        
+        // Find parent by traversing up the hierarchy
+        var parentIndex = currentIndex - 1
+        while parentIndex >= 0 {
+            if items[parentIndex].subItems?.contains(where: { $0.id == items[currentIndex].id }) == true {
+                break
+            }
+            parentIndex -= 1
+        }
+        
+        guard parentIndex >= 0 else {
+            showShakeAnimation()
+            return
+        }
+        
+        // Remove from parent's children
+        var parentItem = items[parentIndex]
+        let currentItem = items[currentIndex]
+        
+        if let childIndex = parentItem.subItems?.firstIndex(where: { $0.id == currentItem.id }) {
+            parentItem.subItems?.remove(at: childIndex)
+            
+            // Update parent status if it has no more children
+            if parentItem.subItems?.isEmpty == true {
+                parentItem.status = .todo
+            }
+            
+            // Update parent in items array
+            items[parentIndex] = parentItem
+            
+            // Insert item at new position
+            items.insert(currentItem, at: parentIndex + 1)
+        }
+    }
+
+    // MARK: - Visual Feedback
+
+    private func showShakeAnimation() {
+        shakeSelected = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            self.shakeSelected = false
+        }
+    }
 }
 
 /// Main view for the task list
@@ -113,22 +205,44 @@ struct TaskListView: View {
     private let baseStatusSize: Double = 11.0
     private let baseNewItemSize: Double = 13.0
     
+    private struct FlattenedItem: Identifiable {
+        let id = UUID()
+        let item: Item
+        let level: Int
+    }
+    
+    /// Converte a estrutura hierárquica em uma lista plana para exibição
+    private func buildFlattenedList(items: [Item], level: Int = 0) -> [FlattenedItem] {
+        var result: [FlattenedItem] = []
+        
+        for item in items {
+            result.append(FlattenedItem(item: item, level: level))
+            if let subItems = item.subItems {
+                result.append(contentsOf: buildFlattenedList(items: subItems, level: level + 1))
+            }
+        }
+        
+        return result
+    }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(viewModel.items) { item in
+            ForEach(buildFlattenedList(items: viewModel.items), id: \.id) { itemInfo in
                 ItemRowView(
-                    item: item,
-                    isSelected: viewModel.selectedItemId == item.id,
-                    isEditing: viewModel.editingItemId == item.id,
+                    item: itemInfo.item,
+                    isSelected: viewModel.selectedItemId == itemInfo.item.id,
+                    isEditing: viewModel.editingItemId == itemInfo.item.id,
                     editingDirection: viewModel.editingDirection,
                     onTitleChange: { newTitle in
-                        viewModel.updateItemTitle(item.id, newTitle: newTitle)
+                        viewModel.updateItemTitle(itemInfo.item.id, newTitle: newTitle)
                         isNewItemFieldFocused = true
                     },
                     fontSize: baseTitleSize * zoomLevel,
-                    statusFontSize: baseStatusSize * zoomLevel
+                    statusFontSize: baseStatusSize * zoomLevel,
+                    level: itemInfo.level  // Novo parâmetro
                 )
-                .background(viewModel.selectedItemId == item.id ? Color.accentColor.opacity(0.5) : Color.clear)
+                .background(viewModel.selectedItemId == itemInfo.item.id ? Color.accentColor.opacity(0.5) : Color.clear)
+                .modifier(ShakeEffect(shake: itemInfo.item.id == viewModel.selectedItemId && viewModel.shakeSelected))
             }
             
             Group {
@@ -152,7 +266,7 @@ struct TaskListView: View {
                     .opacity(0)
                     .frame(maxWidth: 0, maxHeight: 0)
                 
-                Button("Zoom In") {
+                Button("") {
                     zoomLevel = min(maxZoom, zoomLevel + zoomStep)
                 }
                 .keyboardShortcut(KeyboardShortcut("=", modifiers: .command))
@@ -160,12 +274,24 @@ struct TaskListView: View {
                 .frame(maxWidth: 0, maxHeight: 0)
                 
                 // Zoom out shortcut
-                Button("Zoom Out") {
+                Button("") {
                     zoomLevel = max(minZoom, zoomLevel - zoomStep)
                 }
                 .keyboardShortcut(KeyboardShortcut("-", modifiers: .command))
                 .opacity(0)
                 .frame(maxWidth: 0, maxHeight: 0)
+                    
+                // Move hierarchy with Command+Option
+                Button("") { viewModel.moveSelectedHierarchyUp() }
+                    .keyboardShortcut(.upArrow, modifiers: [.command, .option])
+                    .opacity(0)
+                    .frame(maxWidth: 0, maxHeight: 0)
+
+                Button("") { viewModel.moveSelectedHierarchyDown() }
+                    .keyboardShortcut(.downArrow, modifiers: [.command, .option])
+                    .opacity(0)
+                    .frame(maxWidth: 0, maxHeight: 0)
+
             }
             
             // New item field
@@ -201,6 +327,10 @@ struct TaskListView: View {
                 return .handled
             }
             return .ignored
+        }
+        .onKeyPress(.tab) {
+            viewModel.indentSelectedItem()
+            return .handled
         }
     }
 }
@@ -288,6 +418,7 @@ struct ItemRowView: View {
     let onTitleChange: (String) -> Void
     let fontSize: Double
     let statusFontSize: Double
+    let level: Int  // Novo parâmetro
     
     @State private var editingTitle: String = ""
     @State private var statusScale: Double = 1.0
@@ -312,16 +443,17 @@ struct ItemRowView: View {
                     fontSize: fontSize
                 )
                 .onAppear { editingTitle = item.title }
-                .padding(.leading, CGFloat(item.nestingLevel) * 20)
+                .padding(.leading, CGFloat(level) * 20)
             } else {
                 Text(item.title)
                     .font(.system(size: fontSize))
-                    .padding(.leading, CGFloat(item.nestingLevel) * 20)
             }
         }
+        .padding(.leading, CGFloat(level) * 20)
         .padding(.vertical, 2)
         .padding(.horizontal, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .animation(.easeInOut(duration: 0.2), value: item.nestingLevel)
     }
     
     private var statusColor: Color {
@@ -332,6 +464,96 @@ struct ItemRowView: View {
         case .proj, .subProj: return .purple
         case .someday, .maybe, .future: return .gray
         }
+    }
+}
+
+extension TaskListViewModel {
+    /// Estrutura auxiliar para operações de hierarquia
+    private struct ItemPath {
+        let parentIndex: Int?
+        let index: Int
+        let level: Int
+    }
+    
+    /// Encontra o caminho do item selecionado na hierarquia
+    private func findSelectedItemPath() -> ItemPath? {
+        guard let selectedId = selectedItemId else { return nil }
+        
+        func findInItems(_ items: [Item], parentIndex: Int?, level: Int) -> ItemPath? {
+            for (index, item) in items.enumerated() {
+                if item.id == selectedId {
+                    return ItemPath(parentIndex: parentIndex, index: index, level: level)
+                }
+                if let subItems = item.subItems,
+                   let found = findInItems(subItems, parentIndex: index, level: level + 1) {
+                    return found
+                }
+            }
+            return nil
+        }
+        
+        return findInItems(items, parentIndex: nil, level: 0)
+    }
+    
+    /// Move a hierarquia selecionada para cima
+    func moveSelectedHierarchyUp() {
+        guard let path = findSelectedItemPath() else { return }
+        
+        if path.parentIndex == nil {
+            // Item está no nível raiz
+            guard path.index > 0 else { return }
+            
+            let currentItem = items[path.index]
+            items.remove(at: path.index)
+            items.insert(currentItem, at: path.index - 1)
+            selectedItemId = currentItem.id
+            
+        } else {
+            // Item está em um subnível
+            // TODO: Implementar movimentação dentro de subníveis
+        }
+    }
+    
+    /// Move a hierarquia selecionada para baixo
+    func moveSelectedHierarchyDown() {
+        guard let path = findSelectedItemPath() else { return }
+        
+        if path.parentIndex == nil {
+            // Item está no nível raiz
+            guard path.index < items.count - 1 else { return }
+            
+            let currentItem = items[path.index]
+            items.remove(at: path.index)
+            items.insert(currentItem, at: path.index + 1)
+            selectedItemId = currentItem.id
+            
+        } else {
+            // Item está em um subnível
+            // TODO: Implementar movimentação dentro de subníveis
+        }
+    }
+
+}
+
+// Shake effect modifier
+struct ShakeEffect: GeometryEffect {
+    var amount: CGFloat = 10
+    var shakesPerUnit = 3
+    var shake: Bool
+    
+    var animatableData: CGFloat {
+        get { CGFloat(shake ? 1 : 0) }
+        set { }
+    }
+    
+    func effectValue(size: CGSize) -> ProjectionTransform {
+        guard shake else { return ProjectionTransform(.identity) }
+        
+        let animation = Float(animatableData)
+        let curve = sin(Float(shakesPerUnit) * 2.0 * .pi * animation)
+        let offsetX = CGFloat(curve) * amount
+        
+        return ProjectionTransform(CGAffineTransform(translationX: offsetX, y: 0))
     }
 }
 
