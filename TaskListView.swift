@@ -32,21 +32,36 @@ class TaskListViewModel: ObservableObject {
     }
     
     func selectNextItem() {
-        if let current = currentIndex {
-            let nextIndex = min(current + 1, items.count - 1)
-            selectedItemId = items[nextIndex].id
-        } else if !items.isEmpty {
-            selectedItemId = items[0].id
+        // Cria uma lista plana com todos os items na ordem visual
+        let flatList = buildFlattenedList(items: items)
+        
+        // Encontra o índice do item atual
+        guard let currentFlatIndex = flatList.firstIndex(where: { $0.item.id == selectedItemId }) else {
+            // Se nenhum item selecionado, seleciona o primeiro
+            if !flatList.isEmpty {
+                selectedItemId = flatList[0].item.id
+            }
+            return
         }
+        
+        // Seleciona o próximo item da lista plana
+        let nextIndex = min(currentFlatIndex + 1, flatList.count - 1)
+        selectedItemId = flatList[nextIndex].item.id
     }
-    
+
     func selectPreviousItem() {
-        if let current = currentIndex {
-            let previousIndex = max(current - 1, 0)
-            selectedItemId = items[previousIndex].id
-        } else if !items.isEmpty {
-            selectedItemId = items[0].id
+        let flatList = buildFlattenedList(items: items)
+        
+        guard let currentFlatIndex = flatList.firstIndex(where: { $0.item.id == selectedItemId }) else {
+            if !flatList.isEmpty {
+                selectedItemId = flatList[0].item.id
+            }
+            return
         }
+        
+        // Seleciona o item anterior da lista plana
+        let previousIndex = max(currentFlatIndex - 1, 0)
+        selectedItemId = flatList[previousIndex].item.id
     }
     
     func startEditingSelected() {
@@ -62,24 +77,48 @@ class TaskListViewModel: ObservableObject {
     }
     
     func cycleSelectedItemStatus(direction: Int = 1) {
-        guard let currentIndex = currentIndex else { return }
-        var item = items[currentIndex]
+        guard let selectedId = selectedItemId else { return }
         
-        // Choose appropriate status array based on item type
-        let statuses = item.isProject || item.isSubProject ? projectStatuses : taskStatuses
-        
-        // Find current status index
-        guard let statusIndex = statuses.firstIndex(of: item.status) else {
-            // If status not found in appropriate array, default to first status
-            item.status = statuses[0]
-            items[currentIndex] = item
-            return
+        updateItemInHierarchy(itemId: selectedId) { item in
+            // Choose appropriate status array based on item type
+            let statuses = item.isProject || item.isSubProject ? projectStatuses : taskStatuses
+            
+            // Find current status index
+            if let statusIndex = statuses.firstIndex(of: item.status) {
+                let nextIndex = (statusIndex + direction + statuses.count) % statuses.count
+                item.status = statuses[nextIndex]
+            } else {
+                item.status = statuses[0]
+            }
+            
+            item.touch()
+        }
+    }
+    
+    private func updateItemInHierarchy(itemId: UUID, action: (inout Item) -> Void) {
+        // Função recursiva para atualizar item em qualquer nível
+        func update(in items: inout [Item]) -> Bool {
+            for index in items.indices {
+                if items[index].id == itemId {
+                    action(&items[index])
+                    return true
+                }
+                
+                if var subItems = items[index].subItems {
+                    if update(in: &subItems) {
+                        items[index].subItems = subItems
+                        return true
+                    }
+                }
+            }
+            return false
         }
         
-        // Calculate next status index
-        let nextIndex = (statusIndex + direction + statuses.count) % statuses.count
-        item.status = statuses[nextIndex]
-        items[currentIndex] = item
+        // Atualiza o item em qualquer nível da hierarquia
+        var updatedItems = items
+        if update(in: &updatedItems) {
+            items = updatedItems
+        }
     }
     
     func addItem(_ title: String) {
@@ -102,85 +141,121 @@ class TaskListViewModel: ObservableObject {
     // MARK: - Indentation Functions
         
     func indentSelectedItem() {
-        guard let currentIndex = currentIndex, currentIndex > 0 else {
+        let flatList = buildFlattenedList(items: items)
+        guard let selectedId = selectedItemId,
+              let currentItem = flatList.first(where: { $0.item.id == selectedId }) else {
             showShakeAnimation()
             return
         }
         
-        var currentItem = items[currentIndex]
-        var parentItem = items[currentIndex - 1]
-        
-        // Check if adding would exceed max nesting level
-        if parentItem.nestingLevel >= Item.maxNestingLevel - 1 {
-            showShakeAnimation()
-            return
-        }
-        
-        do {
-            // Remove item from current position
-            if parentItem.isTask {
-                parentItem.status = parentItem.nestingLevel == 0 ? .proj : .subProj
-                parentItem.touch() // Força atualização
+        // Função recursiva para indentar em qualquer nível
+        func indent(in items: inout [Item]) -> Bool {
+            for index in items.indices {
+                // Verifica se encontramos o item para indentar
+                if items[index].id == selectedId {
+                    // Não pode indentar o primeiro item ou se não tiver item acima
+                    guard index > 0 else { return false }
+                    
+                    let previousItem = items[index - 1]
+                    // Verifica limite de nesting
+                    let newLevel = (previousItem.nestingLevel + 1)
+                    guard newLevel < Item.maxNestingLevel else {
+                        showShakeAnimation()
+                        return false
+                    }
+                    
+                    // Remove o item atual
+                    let itemToMove = items.remove(at: index)
+                    
+                    // Atualiza o status do novo pai se necessário
+                    var newParent = previousItem
+                    if newParent.isTask {
+                        // Se estamos no nível 0, o pai vira PROJ
+                        // Se estamos no nível 1, o pai vira SUBPROJ
+                        let parentLevel = flatList.first(where: { $0.item.id == previousItem.id })?.level ?? 0
+                        newParent.status = parentLevel == 0 ? .proj : .subProj
+                        newParent.touch()
+                    }
+                    
+                    // Adiciona como filho
+                    try? newParent.addSubItem(itemToMove)
+                    items[index - 1] = newParent
+                    
+                    return true
+                }
+                
+                // Procura recursivamente nos subitems
+                if var subItems = items[index].subItems {
+                    if indent(in: &subItems) {
+                        items[index].subItems = subItems
+                        return true
+                    }
+                }
             }
-            
-            items.remove(at: currentIndex)
-            
-            // Add as child of parent
-            try parentItem.addSubItem(currentItem)
-            
-            // Update parent status if needed
-            
-            // Update in items array
-            items[currentIndex - 1] = parentItem
-
-            
-        } catch {
-            // Restore item if operation failed
-            items.insert(currentItem, at: currentIndex)
-            showShakeAnimation()
+            return false
+        }
+        
+        var updatedItems = items
+        if indent(in: &updatedItems) {
+            items = updatedItems
         }
     }
 
     func dedentSelectedItem() {
-        guard let currentIndex = currentIndex else {
+        let flatList = buildFlattenedList(items: items)
+        guard let selectedId = selectedItemId else {
             showShakeAnimation()
             return
         }
-        
-        // Find parent by traversing up the hierarchy
-        var parentIndex = currentIndex - 1
-        while parentIndex >= 0 {
-            if items[parentIndex].subItems?.contains(where: { $0.id == items[currentIndex].id }) == true {
-                break
+
+        // Função recursiva para encontrar e remover o item de sua posição atual
+        func findAndRemoveFromParent(in items: inout [Item]) -> (Item, Int)? {
+            for parentIndex in items.indices {
+                if let subItems = items[parentIndex].subItems,
+                   let childIndex = subItems.firstIndex(where: { $0.id == selectedId }) {
+                    // Encontramos o item, vamos removê-lo
+                    var parent = items[parentIndex]
+                    var child = parent.subItems!.remove(at: childIndex)
+                    
+                    // Se o pai ficou sem filhos, volta para task
+                    if parent.subItems!.isEmpty {
+                        parent.status = .todo
+                    }
+
+                    // Ajusta o status do item que está sendo removido baseado no novo nível
+                    let currentLevel = flatList.first(where: { $0.item.id == child.id })?.level ?? 0
+                    if !child.isTask {
+                        // Se está indo para nível 0, deve ser PROJ
+                        // Se está indo para nível 1, mantém SUBPROJ
+                        child.status = currentLevel <= 1 ? .proj : .subProj
+                    }
+                    
+                    items[parentIndex] = parent
+                    return (child, parentIndex)
+                }
+                
+                // Procura recursivamente nos subitems
+                if var subItems = items[parentIndex].subItems {
+                    if let found = findAndRemoveFromParent(in: &subItems) {
+                        items[parentIndex].subItems = subItems
+                        return found
+                    }
+                }
             }
-            parentIndex -= 1
+            return nil
         }
-        
-        guard parentIndex >= 0 else {
+
+        var updatedItems = items
+        if let (removedItem, parentIndex) = findAndRemoveFromParent(in: &updatedItems) {
+            // Insere o item logo após seu antigo pai
+            updatedItems.insert(removedItem, at: parentIndex + 1)
+            items = updatedItems
+            selectedItemId = removedItem.id
+        } else {
             showShakeAnimation()
-            return
-        }
-        
-        // Remove from parent's children
-        var parentItem = items[parentIndex]
-        let currentItem = items[currentIndex]
-        
-        if let childIndex = parentItem.subItems?.firstIndex(where: { $0.id == currentItem.id }) {
-            parentItem.subItems?.remove(at: childIndex)
-            
-            // Update parent status if it has no more children
-            if parentItem.subItems?.isEmpty == true {
-                parentItem.status = .todo
-            }
-            
-            // Update parent in items array
-            items[parentIndex] = parentItem
-            
-            // Insert item at new position
-            items.insert(currentItem, at: parentIndex + 1)
         }
     }
-
+    
     // MARK: - Visual Feedback
 
     private func showShakeAnimation() {
@@ -188,6 +263,38 @@ class TaskListViewModel: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             self.shakeSelected = false
         }
+    }
+    
+    // Helper function to create flattened list in ViewModel
+    private func buildFlattenedList(items: [Item]) -> [FlattenedItem] {
+        var result: [FlattenedItem] = []
+        
+        for item in items {
+            result.append(FlattenedItem(item: item, level: 0))
+            if let subItems = item.subItems {
+                result.append(contentsOf: buildFlattenedSubItems(items: subItems, level: 1))
+            }
+        }
+        
+        return result
+    }
+
+    private func buildFlattenedSubItems(items: [Item], level: Int) -> [FlattenedItem] {
+        var result: [FlattenedItem] = []
+        
+        for item in items {
+            result.append(FlattenedItem(item: item, level: level))
+            if let subItems = item.subItems {
+                result.append(contentsOf: buildFlattenedSubItems(items: subItems, level: level + 1))
+            }
+        }
+        
+        return result
+    }
+
+    private struct FlattenedItem {
+        let item: Item
+        let level: Int
     }
 }
 
@@ -328,8 +435,12 @@ struct TaskListView: View {
             }
             return .ignored
         }
-        .onKeyPress(.tab) {
+        .onKeyPress("]") {
             viewModel.indentSelectedItem()
+            return .handled
+        }
+        .onKeyPress("[") {
+            viewModel.dedentSelectedItem()
             return .handled
         }
     }
@@ -433,6 +544,11 @@ struct ItemRowView: View {
                 .background(statusColor.opacity(0.2))
                 .cornerRadius(4)
                 .scaleEffect(statusScale)
+
+            // Debug: Mostra o nível
+            Text("L\(level)")
+                .font(.system(size: statusFontSize * 0.8, design: .monospaced))
+                .foregroundColor(.gray)
             
             // Title com tamanho de fonte ajustável
             if isEditing {
@@ -497,42 +613,65 @@ extension TaskListViewModel {
     
     /// Move a hierarquia selecionada para cima
     func moveSelectedHierarchyUp() {
-        guard let path = findSelectedItemPath() else { return }
+        let flatList = buildFlattenedList(items: items)
+        guard let selectedId = selectedItemId,
+              let currentItem = flatList.first(where: { $0.item.id == selectedId }) else { return }
         
-        if path.parentIndex == nil {
-            // Item está no nível raiz
-            guard path.index > 0 else { return }
-            
-            let currentItem = items[path.index]
-            items.remove(at: path.index)
-            items.insert(currentItem, at: path.index - 1)
-            selectedItemId = currentItem.id
-            
-        } else {
-            // Item está em um subnível
-            // TODO: Implementar movimentação dentro de subníveis
+        // Função recursiva para mover item em qualquer nível
+        func moveUp(in items: inout [Item]) -> Bool {
+            for parentIndex in items.indices {
+                if items[parentIndex].id == selectedId && parentIndex > 0 {
+                    // Move no nível atual
+                    items.swapAt(parentIndex, parentIndex - 1)
+                    return true
+                }
+                
+                if var subItems = items[parentIndex].subItems {
+                    if moveUp(in: &subItems) {
+                        items[parentIndex].subItems = subItems
+                        return true
+                    }
+                }
+            }
+            return false
         }
-    }
-    
-    /// Move a hierarquia selecionada para baixo
-    func moveSelectedHierarchyDown() {
-        guard let path = findSelectedItemPath() else { return }
         
-        if path.parentIndex == nil {
-            // Item está no nível raiz
-            guard path.index < items.count - 1 else { return }
-            
-            let currentItem = items[path.index]
-            items.remove(at: path.index)
-            items.insert(currentItem, at: path.index + 1)
-            selectedItemId = currentItem.id
-            
-        } else {
-            // Item está em um subnível
-            // TODO: Implementar movimentação dentro de subníveis
+        var updatedItems = items
+        if moveUp(in: &updatedItems) {
+            items = updatedItems
         }
     }
 
+    /// Move a hierarquia selecionada para baixo
+    func moveSelectedHierarchyDown() {
+        let flatList = buildFlattenedList(items: items)
+        guard let selectedId = selectedItemId,
+              let currentItem = flatList.first(where: { $0.item.id == selectedId }) else { return }
+        
+        // Função recursiva para mover item em qualquer nível
+        func moveDown(in items: inout [Item]) -> Bool {
+            for parentIndex in items.indices {
+                if items[parentIndex].id == selectedId && parentIndex < items.count - 1 {
+                    // Move no nível atual
+                    items.swapAt(parentIndex, parentIndex + 1)
+                    return true
+                }
+                
+                if var subItems = items[parentIndex].subItems {
+                    if moveDown(in: &subItems) {
+                        items[parentIndex].subItems = subItems
+                        return true
+                    }
+                }
+            }
+            return false
+        }
+        
+        var updatedItems = items
+        if moveDown(in: &updatedItems) {
+            items = updatedItems
+        }
+    }
 }
 
 // Shake effect modifier
