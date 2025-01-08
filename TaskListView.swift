@@ -143,50 +143,96 @@ class TaskListViewModel: ObservableObject {
     func indentSelectedItem() {
         let flatList = buildFlattenedList(items: items)
         guard let selectedId = selectedItemId,
-              let currentItem = flatList.first(where: { $0.item.id == selectedId }) else {
+              let currentItemIndex = flatList.firstIndex(where: { $0.item.id == selectedId }) else {
+            showShakeAnimation()
+            return
+        }
+        
+        let currentItem = flatList[currentItemIndex]
+        
+        // Não permite indentar se for um SUBPROJ
+        if currentItem.item.status == .subProj {
+            showShakeAnimation()
+            return
+        }
+        
+        // Procura o item pai adequado (primeiro item acima no mesmo nível)
+        var potentialParentIndex = currentItemIndex - 1
+        while potentialParentIndex >= 0 {
+            let potentialParent = flatList[potentialParentIndex]
+            if potentialParent.level == currentItem.level {
+                // Encontramos o pai adequado
+                break
+            }
+            potentialParentIndex -= 1
+        }
+        
+        // Se não encontramos um pai adequado ou é o primeiro item, não podemos indentar
+        guard potentialParentIndex >= 0 else {
+            showShakeAnimation()
+            return
+        }
+        
+        let parentItem = flatList[potentialParentIndex]
+        
+        // Verifica limite de nesting
+        let newLevel = parentItem.level + 1
+        guard newLevel < Item.maxNestingLevel else {
             showShakeAnimation()
             return
         }
         
         // Função recursiva para indentar em qualquer nível
-        func indent(in items: inout [Item]) -> Bool {
+        func indent(in items: inout [Item], parentId: UUID) -> Bool {
             for index in items.indices {
                 // Verifica se encontramos o item para indentar
                 if items[index].id == selectedId {
-                    // Não pode indentar o primeiro item ou se não tiver item acima
-                    guard index > 0 else { return false }
+                    // Remove o item atual
+                    var itemToMove = items.remove(at: index)
                     
-                    let previousItem = items[index - 1]
-                    // Verifica limite de nesting
-                    let newLevel = (previousItem.nestingLevel + 1)
-                    guard newLevel < Item.maxNestingLevel else {
-                        showShakeAnimation()
-                        return false
+                    // Se o item sendo movido é um projeto (tem filhos) e está indo para nível 1
+                    // então ele deve se tornar um subprojeto
+                    if !itemToMove.isTask && parentItem.level == 0 {
+                        itemToMove.status = .subProj
+                        itemToMove.touch()
                     }
                     
-                    // Remove o item atual
-                    let itemToMove = items.remove(at: index)
-                    
+                    return true
+                }
+                
+                // Se encontramos o pai
+                if items[index].id == parentId {
                     // Atualiza o status do novo pai se necessário
-                    var newParent = previousItem
-                    if newParent.isTask {
+                    if items[index].isTask {
                         // Se estamos no nível 0, o pai vira PROJ
                         // Se estamos no nível 1, o pai vira SUBPROJ
-                        let parentLevel = flatList.first(where: { $0.item.id == previousItem.id })?.level ?? 0
-                        newParent.status = parentLevel == 0 ? .proj : .subProj
-                        newParent.touch()
+                        items[index].status = parentItem.level == 0 ? .proj : .subProj
+                        items[index].touch()
                     }
                     
-                    // Adiciona como filho
-                    try? newParent.addSubItem(itemToMove)
-                    items[index - 1] = newParent
+                    // Adiciona o item como filho
+                    if items[index].subItems == nil {
+                        items[index].subItems = []
+                    }
+                    
+                    // Guarda o item removido para adicionar depois
+                    if let removedItem = findAndRemoveItem(in: &items, id: selectedId) {
+                        var itemToAdd = removedItem
+                        // Se o item sendo movido é um projeto (tem filhos) e está indo para nível 1
+                        // então ele deve se tornar um subprojeto
+                        if !itemToAdd.isTask && parentItem.level == 0 {
+                            itemToAdd.status = .subProj
+                            itemToAdd.touch()
+                        }
+                        try? items[index].addSubItem(itemToAdd)
+                    }
                     
                     return true
                 }
                 
                 // Procura recursivamente nos subitems
                 if var subItems = items[index].subItems {
-                    if indent(in: &subItems) {
+                    if indent(in: &subItems, parentId: parentId) {
                         items[index].subItems = subItems
                         return true
                     }
@@ -195,49 +241,61 @@ class TaskListViewModel: ObservableObject {
             return false
         }
         
+        // Função auxiliar para encontrar e remover um item
+        func findAndRemoveItem(in items: inout [Item], id: UUID) -> Item? {
+            if let index = items.firstIndex(where: { $0.id == id }) {
+                return items.remove(at: index)
+            }
+            
+            for i in items.indices {
+                if var subItems = items[i].subItems {
+                    if let found = findAndRemoveItem(in: &subItems, id: id) {
+                        items[i].subItems = subItems
+                        return found
+                    }
+                }
+            }
+            
+            return nil
+        }
+        
         var updatedItems = items
-        if indent(in: &updatedItems) {
+        if indent(in: &updatedItems, parentId: parentItem.item.id) {
             items = updatedItems
         }
     }
 
     func dedentSelectedItem() {
         let flatList = buildFlattenedList(items: items)
-        guard let selectedId = selectedItemId else {
+        guard let selectedId = selectedItemId,
+              let currentItemInfo = flatList.first(where: { $0.item.id == selectedId }) else {
             showShakeAnimation()
             return
         }
 
         // Função recursiva para encontrar e remover o item de sua posição atual
-        func findAndRemoveFromParent(in items: inout [Item]) -> (Item, Int)? {
-            for parentIndex in items.indices {
-                if let subItems = items[parentIndex].subItems,
+        // Retorna o item removido e seu pai
+        func findParentInfo(in items: inout [Item]) -> (item: Item, currentParent: Item)? {
+            for index in items.indices {
+                if let subItems = items[index].subItems,
                    let childIndex = subItems.firstIndex(where: { $0.id == selectedId }) {
-                    // Encontramos o item, vamos removê-lo
-                    var parent = items[parentIndex]
-                    var child = parent.subItems!.remove(at: childIndex)
+                    // Encontramos o item e seu pai
+                    var parent = items[index]
+                    let child = parent.subItems!.remove(at: childIndex)
                     
                     // Se o pai ficou sem filhos, volta para task
                     if parent.subItems!.isEmpty {
                         parent.status = .todo
                     }
-
-                    // Ajusta o status do item que está sendo removido baseado no novo nível
-                    let currentLevel = flatList.first(where: { $0.item.id == child.id })?.level ?? 0
-                    if !child.isTask {
-                        // Se está indo para nível 0, deve ser PROJ
-                        // Se está indo para nível 1, mantém SUBPROJ
-                        child.status = currentLevel <= 1 ? .proj : .subProj
-                    }
                     
-                    items[parentIndex] = parent
-                    return (child, parentIndex)
+                    items[index] = parent
+                    return (child, parent)
                 }
                 
                 // Procura recursivamente nos subitems
-                if var subItems = items[parentIndex].subItems {
-                    if let found = findAndRemoveFromParent(in: &subItems) {
-                        items[parentIndex].subItems = subItems
+                if var subItems = items[index].subItems {
+                    if let found = findParentInfo(in: &subItems) {
+                        items[index].subItems = subItems
                         return found
                     }
                 }
@@ -246,11 +304,45 @@ class TaskListViewModel: ObservableObject {
         }
 
         var updatedItems = items
-        if let (removedItem, parentIndex) = findAndRemoveFromParent(in: &updatedItems) {
-            // Insere o item logo após seu antigo pai
-            updatedItems.insert(removedItem, at: parentIndex + 1)
-            items = updatedItems
-            selectedItemId = removedItem.id
+        if let (removedItem, currentParent) = findParentInfo(in: &updatedItems) {
+            // Função para adicionar o item ao novo pai
+            func addToNewParent(item: Item, in items: inout [Item], parentId: UUID) -> Bool {
+                for index in items.indices {
+                    if items[index].id == parentId {
+                        // Encontramos o novo pai (o avô), adicionamos o item como seu filho
+                        try? items[index].addSubItem(removedItem)
+                        return true
+                    }
+                    
+                    // Procura recursivamente nos subitems
+                    if var subItems = items[index].subItems {
+                        if addToNewParent(item: item, in: &subItems, parentId: parentId) {
+                            items[index].subItems = subItems
+                            return true
+                        }
+                    }
+                }
+                return false
+            }
+            
+            // Procura o pai do pai (avô) na lista plana
+            if let grandParentInfo = flatList.first(where: {
+                if let subItems = $0.item.subItems {
+                    return subItems.contains(where: { $0.id == currentParent.id })
+                }
+                return false
+            }) {
+                // Adiciona o item removido como filho do avô
+                _ = addToNewParent(item: removedItem, in: &updatedItems, parentId: grandParentInfo.item.id)
+                items = updatedItems
+                selectedItemId = removedItem.id
+            } else {
+                // Se não encontrou o avô, então o pai é de nível 0
+                // Neste caso, adicionamos o item na raiz
+                updatedItems.append(removedItem)
+                items = updatedItems
+                selectedItemId = removedItem.id
+            }
         } else {
             showShakeAnimation()
         }
