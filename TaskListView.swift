@@ -1,5 +1,11 @@
 import SwiftUI
 
+struct FlattenedItem: Identifiable {
+    let id = UUID()
+    let item: Item
+    let level: Int
+}
+
 /// View model to manage the task list state
 class TaskListViewModel: ObservableObject {
     @Published var items: [Item] = []
@@ -8,6 +14,7 @@ class TaskListViewModel: ObservableObject {
     @Published var selectedItemId: UUID?
     @Published var editingDirection: EditDirection = .right
     @Published var shakeSelected: Bool = false
+    @Published var focusedItemId: UUID?
     
     // Status groups for cycling
     private let taskStatuses: [ItemStatus] = [.todo, .doing, .someday, .maybe, .future, .done]
@@ -358,7 +365,13 @@ class TaskListViewModel: ObservableObject {
     }
     
     // Helper function to create flattened list in ViewModel
-    private func buildFlattenedList(items: [Item]) -> [FlattenedItem] {
+    func buildFlattenedList(items: [Item]) -> [FlattenedItem] {
+        // Se temos um item em foco, retornamos apenas ele e seus filhos
+        if let focusedId = focusedItemId {
+            return buildFocusedList(items: items, focusedId: focusedId)
+        }
+        
+        // Caso contrário, retorna a lista completa
         var result: [FlattenedItem] = []
         
         for item in items {
@@ -371,7 +384,7 @@ class TaskListViewModel: ObservableObject {
         return result
     }
 
-    private func buildFlattenedSubItems(items: [Item], level: Int) -> [FlattenedItem] {
+    func buildFlattenedSubItems(items: [Item], level: Int) -> [FlattenedItem] {
         var result: [FlattenedItem] = []
         
         for item in items {
@@ -382,11 +395,6 @@ class TaskListViewModel: ObservableObject {
         }
         
         return result
-    }
-
-    private struct FlattenedItem {
-        let item: Item
-        let level: Int
     }
 }
 
@@ -404,29 +412,11 @@ struct TaskListView: View {
     private let baseStatusSize: Double = 11.0
     private let baseNewItemSize: Double = 13.0
     
-    private struct FlattenedItem: Identifiable {
-        let id = UUID()
-        let item: Item
-        let level: Int
-    }
-    
-    /// Converte a estrutura hierárquica em uma lista plana para exibição
-    private func buildFlattenedList(items: [Item], level: Int = 0) -> [FlattenedItem] {
-        var result: [FlattenedItem] = []
-        
-        for item in items {
-            result.append(FlattenedItem(item: item, level: level))
-            if let subItems = item.subItems {
-                result.append(contentsOf: buildFlattenedList(items: subItems, level: level + 1))
-            }
-        }
-        
-        return result
-    }
-    
+
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(buildFlattenedList(items: viewModel.items), id: \.id) { itemInfo in
+            ForEach(viewModel.buildFlattenedList(items: viewModel.items), id: \.id) { itemInfo in
                 ItemRowView(
                     item: itemInfo.item,
                     isSelected: viewModel.selectedItemId == itemInfo.item.id,
@@ -438,10 +428,31 @@ struct TaskListView: View {
                     },
                     fontSize: baseTitleSize * zoomLevel,
                     statusFontSize: baseStatusSize * zoomLevel,
-                    level: itemInfo.level  // Novo parâmetro
+                    level: itemInfo.level
                 )
                 .background(viewModel.selectedItemId == itemInfo.item.id ? Color.accentColor.opacity(0.5) : Color.clear)
                 .modifier(ShakeEffect(shake: itemInfo.item.id == viewModel.selectedItemId && viewModel.shakeSelected))
+                .transition(.asymmetric(
+                    insertion: .move(edge: .top).combined(with: .opacity),
+                    removal: .opacity
+                ))
+            }
+            
+            if viewModel.focusedItemId != nil {
+                HStack {
+                    Text("Focus Mode")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                    
+                    Button("Exit") {
+                        viewModel.focusedItemId = nil
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 12))
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Color.accentColor.opacity(0.1))
             }
             
             Group {
@@ -488,6 +499,11 @@ struct TaskListView: View {
 
                 Button("") { viewModel.moveSelectedHierarchyDown() }
                     .keyboardShortcut(.downArrow, modifiers: [.command, .option])
+                    .opacity(0)
+                    .frame(maxWidth: 0, maxHeight: 0)
+                
+                Button("") { viewModel.toggleFocusMode() }
+                    .keyboardShortcut(.return, modifiers: [.command])
                     .opacity(0)
                     .frame(maxWidth: 0, maxHeight: 0)
 
@@ -683,6 +699,41 @@ extension TaskListViewModel {
         let level: Int
     }
     
+    func toggleFocusMode() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            if focusedItemId == selectedItemId {
+                focusedItemId = nil
+            } else {
+                focusedItemId = selectedItemId
+            }
+        }
+    }
+    
+    private func buildFocusedList(items: [Item], focusedId: UUID) -> [FlattenedItem] {
+        for item in items {
+            if item.id == focusedId {
+                // Found the focused item, return it and its children
+                var result = [FlattenedItem(item: item, level: 0)]
+                if let subItems = item.subItems {
+                    result.append(contentsOf: buildFlattenedSubItems(items: subItems, level: 1))
+                }
+                return result
+            }
+            
+            // Look in subitems
+            if let subItems = item.subItems {
+                let focusedList = buildFocusedList(items: subItems, focusedId: focusedId)
+                if !focusedList.isEmpty {
+                    // Se encontramos em um subnível, retornamos ajustando o nível para começar do 0
+                    let baseLevel = focusedList[0].level
+                    return focusedList.map { FlattenedItem(item: $0.item, level: $0.level - baseLevel) }
+                }
+            }
+        }
+        
+        return []
+    }
+    
     /// Encontra o caminho do item selecionado na hierarquia
     private func findSelectedItemPath() -> ItemPath? {
         guard let selectedId = selectedItemId else { return nil }
@@ -788,9 +839,17 @@ struct ShakeEffect: GeometryEffect {
     }
 }
 
+extension Array {
+    var nilIfEmpty: Self? {
+        isEmpty ? nil : self
+    }
+}
+
 // Preview provider for SwiftUI canvas
 struct TaskListView_Previews: PreviewProvider {
     static var previews: some View {
         TaskListView()
     }
 }
+
+
