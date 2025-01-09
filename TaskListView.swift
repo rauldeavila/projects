@@ -140,9 +140,30 @@ class TaskListViewModel: ObservableObject {
     }
     
     func updateItemTitle(_ id: UUID, newTitle: String) {
-        if let index = items.firstIndex(where: { $0.id == id }) {
-            items[index].title = newTitle
-            items[index].touch()
+        // Função recursiva auxiliar para atualizar título em qualquer nível
+        func updateTitle(in items: inout [Item]) -> Bool {
+            for index in items.indices {
+                if items[index].id == id {
+                    items[index].title = newTitle
+                    items[index].touch()
+                    return true
+                }
+                
+                // Procura recursivamente nos subitems
+                if var subItems = items[index].subItems {
+                    if updateTitle(in: &subItems) {
+                        items[index].subItems = subItems
+                        return true
+                    }
+                }
+            }
+            return false
+        }
+        
+        // Atualiza o item em qualquer nível da hierarquia
+        var updatedItems = items
+        if updateTitle(in: &updatedItems) {
+            items = updatedItems
         }
         editingItemId = nil
     }
@@ -534,23 +555,6 @@ struct TaskListView: View {
                             ))
                         }
                         
-                        if viewModel.focusedItemId != nil {
-                            HStack {
-                                Text("Focus Mode")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.secondary)
-                                
-                                Button("Exit") {
-                                    viewModel.focusedItemId = nil
-                                }
-                                .buttonStyle(.plain)
-                                .font(.system(size: 12))
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.accentColor.opacity(0.1))
-                        }
-                        
                         Group {
                             Button("") { viewModel.cycleSelectedItemStatus(direction: -1) }
                                 .keyboardShortcut(.downArrow, modifiers: [.command])
@@ -619,17 +623,36 @@ struct TaskListView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 
                 if viewModel.editingItemId == nil {
-                    TextField("New item...", text: $viewModel.newItemText)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: baseNewItemSize * zoomLevel))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(.black)
-                        .focused($isNewItemFieldFocused)
-                        .onSubmit {
-                            viewModel.commitNewItem()
-                            isNewItemFieldFocused = true
+                    HStack {
+                        TextField("New item...", text: $viewModel.newItemText)
+                            .padding(6)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: baseNewItemSize * zoomLevel))
+                            .focused($isNewItemFieldFocused)
+                            .onSubmit {
+                                viewModel.commitNewItem()
+                                isNewItemFieldFocused = true
+                            }
+                        
+                        Spacer()
+                        
+                        if viewModel.focusedItemId != nil {
+                            HStack(spacing: 8) {
+                                Button("FOCUS") {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        viewModel.focusedItemId = nil
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                                .foregroundColor(.red)
+                                .padding(.trailing, 12)
+                                .font(.system(size: 14).bold().monospaced())
+                            }
                         }
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.black)
                 }
             }
             .background(Color(.textBackgroundColor))
