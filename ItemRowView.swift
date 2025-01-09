@@ -32,7 +32,7 @@ struct ItemRowView: View {
                     }
             } else {
                 Image(systemName: "circle.fill")
-                    .font(.system(size: 4))
+                    .font(.system(size: 16))
                     .foregroundColor(.clear)
             }
             

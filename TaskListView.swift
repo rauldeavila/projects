@@ -45,6 +45,7 @@ struct TaskListView: View {
                                 },
                                 isNewItemFieldFocused: _isNewItemFieldFocused
                             )
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             .background(viewModel.selectedItemId == itemInfo.item.id ? Color.accentColor.opacity(0.5) : Color.clear)
                             .modifier(ShakeEffect(position: viewModel.selectedItemId == itemInfo.item.id ? shakePosition : 0))
                             .onChange(of: viewModel.shakeSelected) {
@@ -124,7 +125,6 @@ struct TaskListView: View {
                                 .frame(maxWidth: 0, maxHeight: 0)
                         } // group
                     }
-                    .padding()
                     .frame(maxWidth: .infinity)
                     .padding(.bottom, 40)
                 }
