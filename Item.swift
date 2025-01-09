@@ -193,3 +193,26 @@ struct Item: Identifiable, Codable {
         touch()
     }
 }
+
+extension Item {
+    /// Returns the count of completed and total direct tasks
+    var taskCounts: (completed: Int, total: Int) {
+        guard let subItems = subItems else { return (0, 0) }
+        
+        let total = subItems.count
+        let completed = subItems.filter { item in
+            switch item.status {
+            case .done:
+                return true
+            case .proj, .subProj:
+                // For projects and subprojects, only count as done if all their tasks are done
+                let (completedSub, totalSub) = item.taskCounts
+                return completedSub == totalSub && totalSub > 0
+            default:
+                return false
+            }
+        }.count
+        
+        return (completed, total)
+    }
+}
