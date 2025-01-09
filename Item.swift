@@ -42,6 +42,8 @@ struct Item: Identifiable, Codable {
     /// Title of the item
     var title: String
     
+    var isCollapsed: Bool = false
+    
     /// Current status of the item
     var status: ItemStatus
     

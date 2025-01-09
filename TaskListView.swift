@@ -15,6 +15,7 @@ class TaskListViewModel: ObservableObject {
     @Published var editingDirection: EditDirection = .right
     @Published var shakeSelected: Bool = false
     @Published var focusedItemId: UUID?
+    @Published private var allCollapsed: Bool = false  // Novo estado para tracking
     
     // Status groups for cycling
     private let taskStatuses: [ItemStatus] = [.todo, .doing, .someday, .maybe, .future, .done]
@@ -382,32 +383,35 @@ class TaskListViewModel: ObservableObject {
         }
     }
     
-    // Helper function to create flattened list in ViewModel
     func buildFlattenedList(items: [Item]) -> [FlattenedItem] {
-        // Se temos um item em foco, retornamos apenas ele e seus filhos
+        // If we have a focused item, return only it and its children
         if let focusedId = focusedItemId {
             return buildFocusedList(items: items, focusedId: focusedId)
         }
         
-        // Caso contrário, retorna a lista completa
         var result: [FlattenedItem] = []
         
         for item in items {
             result.append(FlattenedItem(item: item, level: 0))
-            if let subItems = item.subItems {
+            
+            // Only add children if the item is not collapsed
+            if let subItems = item.subItems, !item.isCollapsed {
                 result.append(contentsOf: buildFlattenedSubItems(items: subItems, level: 1))
             }
         }
         
         return result
     }
-
-    func buildFlattenedSubItems(items: [Item], level: Int) -> [FlattenedItem] {
+    
+    // Modified buildFlattenedSubItems to respect collapsed state
+    private func buildFlattenedSubItems(items: [Item], level: Int) -> [FlattenedItem] {
         var result: [FlattenedItem] = []
         
         for item in items {
             result.append(FlattenedItem(item: item, level: level))
-            if let subItems = item.subItems {
+            
+            // Only add children if the item is not collapsed
+            if let subItems = item.subItems, !item.isCollapsed {
                 result.append(contentsOf: buildFlattenedSubItems(items: subItems, level: level + 1))
             }
         }
@@ -446,7 +450,12 @@ struct TaskListView: View {
                     },
                     fontSize: baseTitleSize * zoomLevel,
                     statusFontSize: baseStatusSize * zoomLevel,
-                    level: itemInfo.level
+                    level: itemInfo.level,
+                    onToggleCollapse: {
+                        if itemInfo.item.id == viewModel.selectedItemId {
+                            viewModel.toggleSelectedItemCollapse()
+                        }
+                    }
                 )
                 .background(viewModel.selectedItemId == itemInfo.item.id ? Color.accentColor.opacity(0.5) : Color.clear)
                 .modifier(ShakeEffect(shake: itemInfo.item.id == viewModel.selectedItemId && viewModel.shakeSelected))
@@ -522,6 +531,17 @@ struct TaskListView: View {
                 
                 Button("") { viewModel.toggleFocusMode() }
                     .keyboardShortcut(.return, modifiers: [.command])
+                    .opacity(0)
+                    .frame(maxWidth: 0, maxHeight: 0)
+                
+                // Add new collapse/expand shortcuts
+                Button("") { viewModel.toggleSelectedItemCollapse() }
+                    .keyboardShortcut(KeyEquivalent("."), modifiers: .command)
+                    .opacity(0)
+                    .frame(maxWidth: 0, maxHeight: 0)
+                
+                Button("") { viewModel.toggleAllCollapsed() }
+                    .keyboardShortcut(KeyEquivalent("."), modifiers: [.command, .shift])
                     .opacity(0)
                     .frame(maxWidth: 0, maxHeight: 0)
 
@@ -657,11 +677,31 @@ struct ItemRowView: View {
     let statusFontSize: Double
     let level: Int  // Novo parâmetro
     
+    let onToggleCollapse: () -> Void
+    
     @State private var editingTitle: String = ""
     @State private var statusScale: Double = 1.0
     
     var body: some View {
         HStack(spacing: 8) {
+            
+            // Collapse indicator for items with children
+            if item.subItems != nil && !item.subItems!.isEmpty {
+                Image(systemName: item.isCollapsed ? "chevron.right" : "chevron.down")
+                    .font(.system(size: statusFontSize))
+                    .foregroundColor(.secondary)
+                    .onTapGesture {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            onToggleCollapse()
+                        }
+                    }
+            } else {
+                // Spacer to maintain alignment
+                Image(systemName: "circle.fill")
+                    .font(.system(size: 4))
+                    .foregroundColor(.clear)
+            }
+            
             // Status indicator com tamanho de fonte ajustável
             Text(item.status.rawValue)
                 .font(.system(size: statusFontSize, design: .monospaced))
@@ -724,6 +764,110 @@ extension TaskListViewModel {
             } else {
                 focusedItemId = selectedItemId
             }
+        }
+    }
+    
+    func toggleSelectedItemCollapse() {
+        guard let selectedId = selectedItemId else { return }
+        
+        // Recursive function to find and toggle the selected item
+        func toggleCollapse(in items: inout [Item]) -> Bool {
+            for index in items.indices {
+                if items[index].id == selectedId {
+                    items[index].isCollapsed.toggle()
+                    items[index].touch()
+                    return true
+                }
+                
+                if var subItems = items[index].subItems {
+                    if toggleCollapse(in: &subItems) {
+                        items[index].subItems = subItems
+                        return true
+                    }
+                }
+            }
+            return false
+        }
+        
+        var updatedItems = items
+        if toggleCollapse(in: &updatedItems) {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                items = updatedItems
+            }
+        }
+    }
+    
+    // Toggle collapse state of all items
+    func toggleAllCollapsed() {
+        allCollapsed.toggle() // Toggle o estado global
+        
+        // Recursive function to set collapse state
+        func setCollapseState(in items: inout [Item], collapsed: Bool) {
+            for index in items.indices {
+                if items[index].subItems != nil && !items[index].subItems!.isEmpty {
+                    items[index].isCollapsed = collapsed
+                    items[index].touch()
+                    
+                    if var subItems = items[index].subItems {
+                        setCollapseState(in: &subItems, collapsed: collapsed)
+                        items[index].subItems = subItems
+                    }
+                }
+            }
+        }
+        
+        var updatedItems = items
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            setCollapseState(in: &updatedItems, collapsed: allCollapsed)
+            items = updatedItems
+        }
+    }
+    
+    // Collapse all items
+    func collapseAll() {
+        // Recursive function to collapse all items
+        func collapseItems(in items: inout [Item]) {
+            for index in items.indices {
+                if items[index].subItems != nil && !items[index].subItems!.isEmpty {
+                    items[index].isCollapsed = true
+                    items[index].touch()
+                    
+                    if var subItems = items[index].subItems {
+                        collapseItems(in: &subItems)
+                        items[index].subItems = subItems
+                    }
+                }
+            }
+        }
+        
+        var updatedItems = items
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            collapseItems(in: &updatedItems)
+            items = updatedItems
+        }
+    }
+    
+    // Expand all items
+    func expandAll() {
+        // Recursive function to expand all items
+        func expandItems(in items: inout [Item]) {
+            for index in items.indices {
+                if items[index].subItems != nil && !items[index].subItems!.isEmpty {
+                    items[index].isCollapsed = false
+                    items[index].touch()
+                    
+                    if var subItems = items[index].subItems {
+                        expandItems(in: &subItems)
+                        items[index].subItems = subItems
+                    }
+                }
+            }
+        }
+        
+        var updatedItems = items
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            expandItems(in: &updatedItems)
+            items = updatedItems
         }
     }
     
