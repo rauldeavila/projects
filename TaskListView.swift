@@ -15,7 +15,9 @@ class TaskListViewModel: ObservableObject {
     @Published var editingDirection: EditDirection = .right
     @Published var shakeSelected: Bool = false
     @Published var focusedItemId: UUID?
-    @Published private var allCollapsed: Bool = false  // Novo estado para tracking
+    @Published private var allCollapsed: Bool = false
+    @Published var isShowingDeleteConfirmation: Bool = false
+    @Published var deleteConfirmationOption: DeleteOption = .yes
     
     // Status groups for cycling
     private let taskStatuses: [ItemStatus] = [.todo, .doing, .someday, .maybe, .future, .done]
@@ -32,6 +34,67 @@ class TaskListViewModel: ObservableObject {
     enum EditDirection {
         case left
         case right
+    }
+    
+    
+    enum DeleteOption {
+        case yes
+        case no
+        
+        mutating func toggle() {
+            self = self == .yes ? .no : .yes
+        }
+    }
+    
+    func deleteSelectedItem() {
+        guard let selectedId = selectedItemId else { return }
+        
+        func deleteItem(in items: inout [Item]) -> Bool {
+            if let index = items.firstIndex(where: { $0.id == selectedId }) {
+                items.remove(at: index)
+                return true
+            }
+            
+            for index in items.indices {
+                if var subItems = items[index].subItems {
+                    if deleteItem(in: &subItems) {
+                        items[index].subItems = subItems
+                        if subItems.isEmpty {
+                            items[index].status = .todo
+                        }
+                        return true
+                    }
+                }
+            }
+            return false
+        }
+        
+        var updatedItems = items
+        if deleteItem(in: &updatedItems) {
+            items = updatedItems
+            editingItemId = nil
+            isShowingDeleteConfirmation = false
+        }
+    }
+    
+    func handleDeleteConfirmation(confirmed: Bool) {
+        if confirmed {
+            // Store the current index before deletion
+            let flatList = buildFlattenedList(items: items)
+            let currentIndex = flatList.firstIndex { $0.item.id == selectedItemId }
+            
+            // Delete the item
+            deleteSelectedItem()
+            
+            // Select the previous item if it exists
+            if let currentIndex = currentIndex, currentIndex > 0 {
+                selectedItemId = flatList[currentIndex - 1].item.id
+            }
+        } else {
+            // Just clear the confirmation state but keep the item selected
+            isShowingDeleteConfirmation = false
+            editingItemId = nil
+        }
     }
     
     func startEditingSelected(direction: EditDirection = .right) {
@@ -440,6 +503,7 @@ struct TaskListView: View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(viewModel.buildFlattenedList(items: viewModel.items), id: \.id) { itemInfo in
                 ItemRowView(
+                    viewModel: viewModel,
                     item: itemInfo.item,
                     isSelected: viewModel.selectedItemId == itemInfo.item.id,
                     isEditing: viewModel.editingItemId == itemInfo.item.id,
@@ -455,7 +519,8 @@ struct TaskListView: View {
                         if itemInfo.item.id == viewModel.selectedItemId {
                             viewModel.toggleSelectedItemCollapse()
                         }
-                    }
+                    },
+                    isNewItemFieldFocused: _isNewItemFieldFocused
                 )
                 .background(viewModel.selectedItemId == itemInfo.item.id ? Color.accentColor.opacity(0.5) : Color.clear)
                 .modifier(ShakeEffect(shake: itemInfo.item.id == viewModel.selectedItemId && viewModel.shakeSelected))
@@ -598,6 +663,7 @@ struct CustomTextField: NSViewRepresentable {
     let onSubmit: () -> Void
     let cursorPosition: TaskListViewModel.EditDirection
     let fontSize: Double
+    var onEmptyDelete: (() -> Void)? = nil
     
     @State private var hasPositionedCursor = false
     
@@ -621,14 +687,21 @@ struct CustomTextField: NSViewRepresentable {
         
         func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
             if commandSelector == #selector(NSResponder.insertNewline(_:)) {
-                // Primeiro removemos o foco
                 control.window?.makeFirstResponder(nil)
-                // Depois chamamos o onSubmit
                 DispatchQueue.main.async {
                     self.parent.onSubmit()
                 }
                 return true
             }
+            
+            // Handle delete/backspace when text is empty
+            if (commandSelector == #selector(NSResponder.deleteBackward(_:)) ||
+                commandSelector == #selector(NSResponder.deleteForward(_:))) &&
+                textView.string.isEmpty {
+                parent.onEmptyDelete?()
+                return true
+            }
+            
             return false
         }
     }
@@ -698,6 +771,7 @@ struct TaskCounterView: View {
 
 // Agora vamos atualizar o ItemRowView para incluir o contador
 struct ItemRowView: View {
+    let viewModel: TaskListViewModel
     let item: Item
     let isSelected: Bool
     let isEditing: Bool
@@ -706,15 +780,16 @@ struct ItemRowView: View {
     let fontSize: Double
     let statusFontSize: Double
     let level: Int
-    
     let onToggleCollapse: () -> Void
     
     @State private var editingTitle: String = ""
     @State private var statusScale: Double = 1.0
+    @FocusState private var isDeleteConfirmationFocused: Bool
+    @FocusState var isNewItemFieldFocused: Bool
     
     var body: some View {
         HStack(spacing: 8) {
-            // Collapse indicator
+            // Collapse indicator e status (mantém igual)...
             if item.subItems != nil && !item.subItems!.isEmpty {
                 Image(systemName: item.isCollapsed ? "chevron.right" : "chevron.down")
                     .font(.system(size: statusFontSize))
@@ -739,7 +814,7 @@ struct ItemRowView: View {
                 .cornerRadius(4)
                 .scaleEffect(statusScale)
             
-            // Task counter for projects and subprojects
+            // Task counter
             if item.status == .proj || item.status == .subProj {
                 let counts = item.taskCounts
                 TaskCounterView(
@@ -749,16 +824,54 @@ struct ItemRowView: View {
                 )
             }
             
-            // Title
+            // Title area
             if isEditing {
-                CustomTextField(
-                    text: $editingTitle,
-                    onSubmit: { onTitleChange(editingTitle) },
-                    cursorPosition: editingDirection,
-                    fontSize: fontSize
-                )
-                .onAppear { editingTitle = item.title }
-                .padding(.leading, CGFloat(level) * 20)
+                if viewModel.isShowingDeleteConfirmation {
+                    ZStack {
+                        HStack(spacing: 12) {
+                            
+                            Text("Delete this item?")
+                                .foregroundColor(.secondary)
+                            
+                            Text("YES")
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(viewModel.deleteConfirmationOption == .yes ? Color.red : Color.gray.opacity(0.2))
+                                .foregroundColor(viewModel.deleteConfirmationOption == .yes ? .white : .primary)
+                                .cornerRadius(4)
+                            
+                            Text("NO")
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(viewModel.deleteConfirmationOption == .no ? Color.blue : Color.gray.opacity(0.2))
+                                .foregroundColor(viewModel.deleteConfirmationOption == .no ? .white : .primary)
+                                .cornerRadius(4)
+                            
+                        }
+                        .font(.system(size: fontSize))
+                        
+                        DeleteConfirmationNSView(
+                            viewModel: viewModel,
+                            fontSize: fontSize,
+                            isNewItemFieldFocused: _isNewItemFieldFocused
+                        )
+                        .frame(width: 1, height: 1)
+                        .opacity(0.01)
+                    }
+                } else {
+                    CustomTextField(
+                        text: $editingTitle,
+                        onSubmit: { onTitleChange(editingTitle) },
+                        cursorPosition: editingDirection,
+                        fontSize: fontSize,
+                        onEmptyDelete: {
+                            if editingTitle.isEmpty {
+                                viewModel.isShowingDeleteConfirmation = true
+                            }
+                        }
+                    )
+                    .onAppear { editingTitle = item.title }
+                }
             } else {
                 Text(item.title)
                     .font(.system(size: fontSize))
@@ -768,7 +881,6 @@ struct ItemRowView: View {
         .padding(.vertical, 2)
         .padding(.horizontal, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .animation(.easeInOut(duration: 0.2), value: item.nestingLevel)
     }
     
     private var statusColor: Color {
@@ -778,6 +890,65 @@ struct ItemRowView: View {
         case .done: return .green
         case .proj, .subProj: return .purple
         case .someday, .maybe, .future: return .gray
+        }
+    }
+}
+
+struct DeleteConfirmationNSView: NSViewRepresentable {
+    @ObservedObject var viewModel: TaskListViewModel
+    let fontSize: Double
+    @FocusState var isNewItemFieldFocused: Bool
+    
+    class Coordinator: NSResponder {
+        var parent: DeleteConfirmationNSView
+        
+        init(_ parent: DeleteConfirmationNSView) {
+            self.parent = parent
+            super.init()
+        }
+        
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+        
+        override func keyDown(with event: NSEvent) {
+            switch event.keyCode {
+            case 123, 124: // Left arrow (123) or right arrow (124)
+                parent.viewModel.deleteConfirmationOption.toggle()
+            case 36: // Return
+                let wasYes = parent.viewModel.deleteConfirmationOption == .yes
+                parent.viewModel.handleDeleteConfirmation(confirmed: wasYes)
+                DispatchQueue.main.async {
+                    self.parent.isNewItemFieldFocused = true
+                }
+            case 53: // Escape
+                parent.viewModel.isShowingDeleteConfirmation = false
+                parent.viewModel.editingItemId = nil
+                DispatchQueue.main.async {
+                    self.parent.isNewItemFieldFocused = true
+                }
+            default:
+                break
+            }
+        }
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        view.nextResponder = context.coordinator
+        DispatchQueue.main.async {
+            view.window?.makeFirstResponder(context.coordinator)
+        }
+        return view
+    }
+    
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            nsView.window?.makeFirstResponder(context.coordinator)
         }
     }
 }
