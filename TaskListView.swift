@@ -666,7 +666,37 @@ struct CustomTextField: NSViewRepresentable {
     }
 }
 
-// Updated ItemRowView using the custom text field
+struct TaskCounterView: View {
+    let completed: Int
+    let total: Int
+    let fontSize: Double
+    
+    @State private var scale: CGFloat = 1.0
+    
+    var body: some View {
+        Text("\(completed)/\(total)")
+            .font(.system(size: fontSize, design: .monospaced))
+            .foregroundColor(completed == total && total > 0 ? .green : .white)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
+            .background(Color.black)
+            .cornerRadius(4)
+            .scaleEffect(scale)
+            .onChange(of: completed) { _ in
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
+                    scale = 1.2
+                }
+                
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
+                        scale = 1.0
+                    }
+                }
+            }
+    }
+}
+
+// Agora vamos atualizar o ItemRowView para incluir o contador
 struct ItemRowView: View {
     let item: Item
     let isSelected: Bool
@@ -675,7 +705,7 @@ struct ItemRowView: View {
     let onTitleChange: (String) -> Void
     let fontSize: Double
     let statusFontSize: Double
-    let level: Int  // Novo parâmetro
+    let level: Int
     
     let onToggleCollapse: () -> Void
     
@@ -684,8 +714,7 @@ struct ItemRowView: View {
     
     var body: some View {
         HStack(spacing: 8) {
-            
-            // Collapse indicator for items with children
+            // Collapse indicator
             if item.subItems != nil && !item.subItems!.isEmpty {
                 Image(systemName: item.isCollapsed ? "chevron.right" : "chevron.down")
                     .font(.system(size: statusFontSize))
@@ -696,13 +725,12 @@ struct ItemRowView: View {
                         }
                     }
             } else {
-                // Spacer to maintain alignment
                 Image(systemName: "circle.fill")
                     .font(.system(size: 4))
                     .foregroundColor(.clear)
             }
             
-            // Status indicator com tamanho de fonte ajustável
+            // Status indicator
             Text(item.status.rawValue)
                 .font(.system(size: statusFontSize, design: .monospaced))
                 .padding(.horizontal, 4)
@@ -710,13 +738,18 @@ struct ItemRowView: View {
                 .background(statusColor.opacity(0.2))
                 .cornerRadius(4)
                 .scaleEffect(statusScale)
-
-            // Debug: Mostra o nível
-//            Text("L\(level)")
-//                .font(.system(size: statusFontSize * 0.8, design: .monospaced))
-//                .foregroundColor(.gray)
             
-            // Title com tamanho de fonte ajustável
+            // Task counter for projects and subprojects
+            if item.status == .proj || item.status == .subProj {
+                let counts = item.taskCounts
+                TaskCounterView(
+                    completed: counts.completed,
+                    total: counts.total,
+                    fontSize: statusFontSize
+                )
+            }
+            
+            // Title
             if isEditing {
                 CustomTextField(
                     text: $editingTitle,
@@ -1004,6 +1037,29 @@ struct ShakeEffect: GeometryEffect {
 extension Array {
     var nilIfEmpty: Self? {
         isEmpty ? nil : self
+    }
+}
+
+extension Item {
+    /// Returns the count of completed and total direct tasks
+    var taskCounts: (completed: Int, total: Int) {
+        guard let subItems = subItems else { return (0, 0) }
+        
+        let total = subItems.count
+        let completed = subItems.filter { item in
+            switch item.status {
+            case .done:
+                return true
+            case .proj, .subProj:
+                // For projects and subprojects, only count as done if all their tasks are done
+                let (completedSub, totalSub) = item.taskCounts
+                return completedSub == totalSub && totalSub > 0
+            default:
+                return false
+            }
+        }.count
+        
+        return (completed, total)
     }
 }
 
