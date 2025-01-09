@@ -21,7 +21,6 @@ class TaskListViewModel: ObservableObject {
     
     // Status groups for cycling
     private let taskStatuses: [ItemStatus] = [.todo, .doing, .someday, .maybe, .future, .done]
-    private let projectStatuses: [ItemStatus] = [.proj, .subProj]
     
     // Current focused item index
     private var currentIndex: Int? {
@@ -172,8 +171,12 @@ class TaskListViewModel: ObservableObject {
         guard let selectedId = selectedItemId else { return }
         
         updateItemInHierarchy(itemId: selectedId) { item in
-            // Choose appropriate status array based on item type
-            let statuses = item.isProject || item.isSubProject ? projectStatuses : taskStatuses
+
+            if item.isProject || item.isSubProject {
+                return
+            }
+            
+            let statuses = taskStatuses
             
             // Find current status index
             if let statusIndex = statuses.firstIndex(of: item.status) {
