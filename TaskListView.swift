@@ -500,159 +500,169 @@ struct TaskListView: View {
 
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(viewModel.buildFlattenedList(items: viewModel.items), id: \.id) { itemInfo in
-                ItemRowView(
-                    viewModel: viewModel,
-                    item: itemInfo.item,
-                    isSelected: viewModel.selectedItemId == itemInfo.item.id,
-                    isEditing: viewModel.editingItemId == itemInfo.item.id,
-                    editingDirection: viewModel.editingDirection,
-                    onTitleChange: { newTitle in
-                        viewModel.updateItemTitle(itemInfo.item.id, newTitle: newTitle)
-                        isNewItemFieldFocused = true
-                    },
-                    fontSize: baseTitleSize * zoomLevel,
-                    statusFontSize: baseStatusSize * zoomLevel,
-                    level: itemInfo.level,
-                    onToggleCollapse: {
-                        if itemInfo.item.id == viewModel.selectedItemId {
-                            viewModel.toggleSelectedItemCollapse()
+        ScrollViewReader { proxy in
+            ZStack(alignment: .bottom) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(viewModel.buildFlattenedList(items: viewModel.items), id: \.item.id) { itemInfo in
+                            ItemRowView(
+                                id: itemInfo.item.id,
+                                viewModel: viewModel,
+                                item: itemInfo.item,
+                                isSelected: viewModel.selectedItemId == itemInfo.item.id,
+                                isEditing: viewModel.editingItemId == itemInfo.item.id,
+                                editingDirection: viewModel.editingDirection,
+                                onTitleChange: { newTitle in
+                                    viewModel.updateItemTitle(itemInfo.item.id, newTitle: newTitle)
+                                    isNewItemFieldFocused = true
+                                },
+                                fontSize: baseTitleSize * zoomLevel,
+                                statusFontSize: baseStatusSize * zoomLevel,
+                                level: itemInfo.level,
+                                onToggleCollapse: {
+                                    if itemInfo.item.id == viewModel.selectedItemId {
+                                        viewModel.toggleSelectedItemCollapse()
+                                    }
+                                },
+                                isNewItemFieldFocused: _isNewItemFieldFocused
+                            )
+                            .background(viewModel.selectedItemId == itemInfo.item.id ? Color.accentColor.opacity(0.5) : Color.clear)
+                            .modifier(ShakeEffect(shake: itemInfo.item.id == viewModel.selectedItemId && viewModel.shakeSelected))
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .top).combined(with: .opacity),
+                                removal: .opacity
+                            ))
                         }
-                    },
-                    isNewItemFieldFocused: _isNewItemFieldFocused
-                )
-                .background(viewModel.selectedItemId == itemInfo.item.id ? Color.accentColor.opacity(0.5) : Color.clear)
-                .modifier(ShakeEffect(shake: itemInfo.item.id == viewModel.selectedItemId && viewModel.shakeSelected))
-                .transition(.asymmetric(
-                    insertion: .move(edge: .top).combined(with: .opacity),
-                    removal: .opacity
-                ))
-            }
-            
-            if viewModel.focusedItemId != nil {
-                HStack {
-                    Text("Focus Mode")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
-                    
-                    Button("Exit") {
-                        viewModel.focusedItemId = nil
+                        
+                        if viewModel.focusedItemId != nil {
+                            HStack {
+                                Text("Focus Mode")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                                
+                                Button("Exit") {
+                                    viewModel.focusedItemId = nil
+                                }
+                                .buttonStyle(.plain)
+                                .font(.system(size: 12))
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.accentColor.opacity(0.1))
+                        }
+                        
+                        Group {
+                            Button("") { viewModel.cycleSelectedItemStatus(direction: -1) }
+                                .keyboardShortcut(.downArrow, modifiers: [.command])
+                                .opacity(0)
+                                .frame(maxWidth: 0, maxHeight: 0)
+                            
+                            Button("") { viewModel.cycleSelectedItemStatus(direction: 1) }
+                                .keyboardShortcut(.upArrow, modifiers: [.command])
+                                .opacity(0)
+                                .frame(maxWidth: 0, maxHeight: 0)
+                            
+                            Button("") { viewModel.startEditingSelected(direction: .left) }
+                                .keyboardShortcut(.leftArrow, modifiers: [.command])
+                                .opacity(0)
+                                .frame(maxWidth: 0, maxHeight: 0)
+                            
+                            Button("") { viewModel.startEditingSelected(direction: .right) }
+                                .keyboardShortcut(.rightArrow, modifiers: [.command])
+                                .opacity(0)
+                                .frame(maxWidth: 0, maxHeight: 0)
+                            
+                            Button("") {
+                                zoomLevel = min(maxZoom, zoomLevel + zoomStep)
+                            }
+                            .keyboardShortcut(KeyboardShortcut("=", modifiers: .command))
+                            .opacity(0)
+                            .frame(maxWidth: 0, maxHeight: 0)
+                            
+                            Button("") {
+                                zoomLevel = max(minZoom, zoomLevel - zoomStep)
+                            }
+                            .keyboardShortcut(KeyboardShortcut("-", modifiers: .command))
+                            .opacity(0)
+                            .frame(maxWidth: 0, maxHeight: 0)
+                            
+                            Button("") { viewModel.moveSelectedHierarchyUp() }
+                                .keyboardShortcut(.upArrow, modifiers: [.command, .option])
+                                .opacity(0)
+                                .frame(maxWidth: 0, maxHeight: 0)
+                            
+                            Button("") { viewModel.moveSelectedHierarchyDown() }
+                                .keyboardShortcut(.downArrow, modifiers: [.command, .option])
+                                .opacity(0)
+                                .frame(maxWidth: 0, maxHeight: 0)
+                            
+                            Button("") { viewModel.toggleFocusMode() }
+                                .keyboardShortcut(.return, modifiers: [.command])
+                                .opacity(0)
+                                .frame(maxWidth: 0, maxHeight: 0)
+                            
+                            Button("") { viewModel.toggleSelectedItemCollapse() }
+                                .keyboardShortcut(KeyEquivalent("."), modifiers: .command)
+                                .opacity(0)
+                                .frame(maxWidth: 0, maxHeight: 0)
+                            
+                            Button("") { viewModel.toggleAllCollapsed() }
+                                .keyboardShortcut(KeyEquivalent("."), modifiers: [.command, .shift])
+                                .opacity(0)
+                                .frame(maxWidth: 0, maxHeight: 0)
+                        } // group
                     }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 12))
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .padding(.bottom, 40)
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Color.accentColor.opacity(0.1))
-            }
-            
-            Group {
-                Button("") { viewModel.cycleSelectedItemStatus(direction: -1) }
-                    .keyboardShortcut(.downArrow, modifiers: [.command])
-                    .opacity(0)
-                    .frame(maxWidth: 0, maxHeight: 0)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 
-                Button("") { viewModel.cycleSelectedItemStatus(direction: 1) }
-                    .keyboardShortcut(.upArrow, modifiers: [.command])
-                    .opacity(0)
-                    .frame(maxWidth: 0, maxHeight: 0)
-                
-                Button("") { viewModel.startEditingSelected(direction: .left) }
-                    .keyboardShortcut(.leftArrow, modifiers: [.command])
-                    .opacity(0)
-                    .frame(maxWidth: 0, maxHeight: 0)
-                
-                Button("") { viewModel.startEditingSelected(direction: .right) }
-                    .keyboardShortcut(.rightArrow, modifiers: [.command])
-                    .opacity(0)
-                    .frame(maxWidth: 0, maxHeight: 0)
-                
-                Button("") {
-                    zoomLevel = min(maxZoom, zoomLevel + zoomStep)
+                if viewModel.editingItemId == nil {
+                    TextField("New item...", text: $viewModel.newItemText)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: baseNewItemSize * zoomLevel))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(.black)
+                        .focused($isNewItemFieldFocused)
+                        .onSubmit {
+                            viewModel.commitNewItem()
+                            isNewItemFieldFocused = true
+                        }
                 }
-                .keyboardShortcut(KeyboardShortcut("=", modifiers: .command))
-                .opacity(0)
-                .frame(maxWidth: 0, maxHeight: 0)
-                
-                // Zoom out shortcut
-                Button("") {
-                    zoomLevel = max(minZoom, zoomLevel - zoomStep)
+            }
+            .background(Color(.textBackgroundColor))
+            .onKeyPress(.upArrow) {
+                viewModel.selectPreviousItem()
+                if let selectedId = viewModel.selectedItemId {
+                    proxy.scrollTo(selectedId, anchor: .center)
                 }
-                .keyboardShortcut(KeyboardShortcut("-", modifiers: .command))
-                .opacity(0)
-                .frame(maxWidth: 0, maxHeight: 0)
-                    
-                // Move hierarchy with Command+Option
-                Button("") { viewModel.moveSelectedHierarchyUp() }
-                    .keyboardShortcut(.upArrow, modifiers: [.command, .option])
-                    .opacity(0)
-                    .frame(maxWidth: 0, maxHeight: 0)
-
-                Button("") { viewModel.moveSelectedHierarchyDown() }
-                    .keyboardShortcut(.downArrow, modifiers: [.command, .option])
-                    .opacity(0)
-                    .frame(maxWidth: 0, maxHeight: 0)
-                
-                Button("") { viewModel.toggleFocusMode() }
-                    .keyboardShortcut(.return, modifiers: [.command])
-                    .opacity(0)
-                    .frame(maxWidth: 0, maxHeight: 0)
-                
-                // Add new collapse/expand shortcuts
-                Button("") { viewModel.toggleSelectedItemCollapse() }
-                    .keyboardShortcut(KeyEquivalent("."), modifiers: .command)
-                    .opacity(0)
-                    .frame(maxWidth: 0, maxHeight: 0)
-                
-                Button("") { viewModel.toggleAllCollapsed() }
-                    .keyboardShortcut(KeyEquivalent("."), modifiers: [.command, .shift])
-                    .opacity(0)
-                    .frame(maxWidth: 0, maxHeight: 0)
-
-            }
-            
-            // New item field
-            if viewModel.editingItemId == nil {
-                TextField("New item...", text: $viewModel.newItemText)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: baseNewItemSize * zoomLevel)) // Adiciona o zoom da fonte aqui
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .focused($isNewItemFieldFocused)
-                    .onSubmit {
-                        viewModel.commitNewItem()
-                        // Mantém o foco no campo após adicionar
-                        isNewItemFieldFocused = true
-                    }
-            }
-        }
-        .padding()
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(.textBackgroundColor))
-        .onKeyPress(.upArrow) {
-            viewModel.selectPreviousItem()
-            return .handled
-        }
-        .onKeyPress(.downArrow) {
-            viewModel.selectNextItem()
-            return .handled
-        }
-        .onKeyPress(.space) { // Handle space key to start new item
-            if viewModel.editingItemId == nil && !isNewItemFieldFocused {
-                viewModel.startNewItem()
-                isNewItemFieldFocused = true
                 return .handled
             }
-            return .ignored
-        }
-        .onKeyPress("]") {
-            viewModel.indentSelectedItem()
-            return .handled
-        }
-        .onKeyPress("[") {
-            viewModel.dedentSelectedItem()
-            return .handled
+            .onKeyPress(.downArrow) {
+                viewModel.selectNextItem()
+                if let selectedId = viewModel.selectedItemId {
+                    proxy.scrollTo(selectedId, anchor: .center)
+                }
+                return .handled
+            }
+            .onKeyPress(.space) {
+                if viewModel.editingItemId == nil && !isNewItemFieldFocused {
+                    viewModel.startNewItem()
+                    isNewItemFieldFocused = true
+                    return .handled
+                }
+                return .ignored
+            }
+            .onKeyPress("]") {
+                viewModel.indentSelectedItem()
+                return .handled
+            }
+            .onKeyPress("[") {
+                viewModel.dedentSelectedItem()
+                return .handled
+            }
         }
     }
 }
@@ -771,6 +781,7 @@ struct TaskCounterView: View {
 
 // Agora vamos atualizar o ItemRowView para incluir o contador
 struct ItemRowView: View {
+    let id: UUID
     let viewModel: TaskListViewModel
     let item: Item
     let isSelected: Bool
