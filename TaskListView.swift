@@ -638,9 +638,9 @@ struct ItemRowView: View {
                 .scaleEffect(statusScale)
 
             // Debug: Mostra o nível
-            Text("L\(level)")
-                .font(.system(size: statusFontSize * 0.8, design: .monospaced))
-                .foregroundColor(.gray)
+//            Text("L\(level)")
+//                .font(.system(size: statusFontSize * 0.8, design: .monospaced))
+//                .foregroundColor(.gray)
             
             // Title com tamanho de fonte ajustável
             if isEditing {
