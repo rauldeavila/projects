@@ -163,6 +163,7 @@ class TaskListViewModel: ObservableObject {
             return
         }
         
+        
         // Procura o item pai adequado (primeiro item acima no mesmo nível)
         var potentialParentIndex = currentItemIndex - 1
         while potentialParentIndex >= 0 {
@@ -172,6 +173,18 @@ class TaskListViewModel: ObservableObject {
                 break
             }
             potentialParentIndex -= 1
+        }
+        
+        func hasSubProjectInHierarchy(_ item: Item) -> Bool {
+            if item.status == .subProj {
+                return true
+            }
+            return item.subItems?.contains(where: { hasSubProjectInHierarchy($0) }) ?? false
+        }
+        
+        if hasSubProjectInHierarchy(currentItem.item) {
+            showShakeAnimation()
+            return
         }
         
         // Se não encontramos um pai adequado ou é o primeiro item, não podemos indentar
@@ -288,7 +301,12 @@ class TaskListViewModel: ObservableObject {
                    let childIndex = subItems.firstIndex(where: { $0.id == selectedId }) {
                     // Encontramos o item e seu pai
                     var parent = items[index]
-                    let child = parent.subItems!.remove(at: childIndex)
+                    var child = parent.subItems!.remove(at: childIndex)
+                    
+                    if child.status == .subProj {
+                        child.status = .proj
+                        child.touch()
+                    }
                     
                     // Se o pai ficou sem filhos, volta para task
                     if parent.subItems!.isEmpty {
