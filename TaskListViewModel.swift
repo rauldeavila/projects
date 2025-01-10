@@ -23,6 +23,14 @@ class TaskListViewModel: ObservableObject {
     
     init(settings: AppSettings) {
         self.settings = settings
+        loadItems()
+        
+        // Observa mudanças de persistência
+        Task { @MainActor in
+            for await _ in PersistenceManager.shared.$itemsChanged.values {
+                loadItems()
+            }
+        }
     }
     
     // Status groups for cycling
@@ -33,28 +41,65 @@ class TaskListViewModel: ObservableObject {
         }
         return defaultStatuses + customStatuses
     }
-
-    // Current focused item index
-    private var currentIndex: Int? {
-        if let selectedId = selectedItemId {
-            return items.firstIndex { $0.id == selectedId }
+    
+    // MARK: - Private Methods
+    
+    private func loadItems() {
+        do {
+            items = try PersistenceManager.shared.loadItems()
+        } catch {
+            print("Failed to load items: \(error)")
         }
-        return nil
     }
     
-    enum EditDirection {
-        case left
-        case right
+    private func saveItems() {
+        do {
+            try PersistenceManager.shared.saveItems(items)
+        } catch {
+            print("Failed to save items: \(error)")
+        }
     }
     
+    // MARK: - Public Methods
     
-    enum DeleteOption {
-        case yes
-        case no
+    func addItem(_ title: String) {
+        let newItem = Item(title: title)
+        items.append(newItem)
+        saveItems()
+    }
+    
+    func commitNewItem() {
+        guard !newItemText.isEmpty else { return }
+        addItem(newItemText)
+        newItemText = ""
+        editingItemId = nil
+    }
+    
+    func updateItemTitle(_ id: UUID, newTitle: String) {
+        func updateTitle(in items: inout [Item]) -> Bool {
+            for index in items.indices {
+                if items[index].id == id {
+                    items[index].title = newTitle
+                    items[index].touch()
+                    return true
+                }
+                
+                if var subItems = items[index].subItems {
+                    if updateTitle(in: &subItems) {
+                        items[index].subItems = subItems
+                        return true
+                    }
+                }
+            }
+            return false
+        }
         
-        mutating func toggle() {
-            self = self == .yes ? .no : .yes
+        var updatedItems = items
+        if updateTitle(in: &updatedItems) {
+            items = updatedItems
+            saveItems()
         }
+        editingItemId = nil
     }
     
     func deleteSelectedItem() {
@@ -83,8 +128,33 @@ class TaskListViewModel: ObservableObject {
         var updatedItems = items
         if deleteItem(in: &updatedItems) {
             items = updatedItems
+            saveItems()
             editingItemId = nil
             isShowingDeleteConfirmation = false
+        }
+    }
+    
+
+    // Current focused item index
+    private var currentIndex: Int? {
+        if let selectedId = selectedItemId {
+            return items.firstIndex { $0.id == selectedId }
+        }
+        return nil
+    }
+    
+    enum EditDirection {
+        case left
+        case right
+    }
+    
+    
+    enum DeleteOption {
+        case yes
+        case no
+        
+        mutating func toggle() {
+            self = self == .yes ? .no : .yes
         }
     }
     
@@ -150,47 +220,16 @@ class TaskListViewModel: ObservableObject {
         editingItemId = selectedItemId
     }
     
-    func updateItemTitle(_ id: UUID, newTitle: String) {
-        // Função recursiva auxiliar para atualizar título em qualquer nível
-        func updateTitle(in items: inout [Item]) -> Bool {
-            for index in items.indices {
-                if items[index].id == id {
-                    items[index].title = newTitle
-                    items[index].touch()
-                    return true
-                }
-                
-                // Procura recursivamente nos subitems
-                if var subItems = items[index].subItems {
-                    if updateTitle(in: &subItems) {
-                        items[index].subItems = subItems
-                        return true
-                    }
-                }
-            }
-            return false
-        }
-        
-        // Atualiza o item em qualquer nível da hierarquia
-        var updatedItems = items
-        if updateTitle(in: &updatedItems) {
-            items = updatedItems
-        }
-        editingItemId = nil
-    }
-    
     func cycleSelectedItemStatus(direction: Int = 1) {
         guard let selectedId = selectedItemId else { return }
         
         updateItemInHierarchy(itemId: selectedId) { item in
-
             if item.isProject || item.isSubProject {
                 return
             }
             
             let statuses = taskStatuses
             
-            // Find current status index
             if let statusIndex = statuses.firstIndex(of: item.status) {
                 let nextIndex = (statusIndex + direction + statuses.count) % statuses.count
                 item.status = statuses[nextIndex]
@@ -200,6 +239,8 @@ class TaskListViewModel: ObservableObject {
             
             item.touch()
         }
+        
+        saveItems()
     }
     
     private func updateItemInHierarchy(itemId: UUID, action: (inout Item) -> Void) {
@@ -228,21 +269,9 @@ class TaskListViewModel: ObservableObject {
         }
     }
     
-    func addItem(_ title: String) {
-        let newItem = Item(title: title)
-        items.append(newItem)
-    }
-    
     func startNewItem() {
         newItemText = ""
         editingItemId = nil
-    }
-    
-    func commitNewItem() {
-        guard !newItemText.isEmpty else { return }
-        addItem(newItemText)
-        newItemText = ""
-        editingItemId = nil  // Garante que saímos do modo de edição
     }
     
     // MARK: - Indentation Functions
@@ -538,7 +567,6 @@ extension TaskListViewModel {
     func toggleSelectedItemCollapse() {
         guard let selectedId = selectedItemId else { return }
         
-        // Recursive function to find and toggle the selected item
         func toggleCollapse(in items: inout [Item]) -> Bool {
             for index in items.indices {
                 if items[index].id == selectedId {
@@ -561,6 +589,7 @@ extension TaskListViewModel {
         if toggleCollapse(in: &updatedItems) {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                 items = updatedItems
+                saveItems()
             }
         }
     }

@@ -6,12 +6,18 @@
 //
 
 import SwiftUI
+import SwiftData
 
 @main
-struct projectsApp: App {
+struct ProjectsApp: App {
+    init() {
+        AppSettings.shared = AppSettings()
+    }
+    
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(AppSettings.shared)
         }
     }
 }
