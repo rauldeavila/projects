@@ -3,6 +3,8 @@ import SwiftUI
 /// Main view for the task list
 struct TaskListView: View {
     @StateObject private var viewModel = TaskListViewModel()
+    @StateObject private var settings = AppSettings()
+    @StateObject private var commandManager = CommandManager()
     @FocusState private var isNewItemFieldFocused: Bool
     @SceneStorage("zoomLevel") private var zoomLevel: Double = 1.0
     
@@ -16,8 +18,6 @@ struct TaskListView: View {
     private let baseStatusSize: Double = 11.0
     private let baseNewItemSize: Double = 13.0
     
-
-
     var body: some View {
         ScrollViewReader { proxy in
             ZStack(alignment: .bottom) {
@@ -46,10 +46,10 @@ struct TaskListView: View {
                                 isNewItemFieldFocused: _isNewItemFieldFocused
                             )
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(viewModel.selectedItemId == itemInfo.item.id ? Color.accentColor.opacity(0.5) : Color.clear)
+                            .background(viewModel.selectedItemId == itemInfo.item.id ? settings.accentColor.opacity(0.2) : Color.clear)
                             .modifier(ShakeEffect(position: viewModel.selectedItemId == itemInfo.item.id ? shakePosition : 0))
                             .onChange(of: viewModel.shakeSelected) {
-                                guard viewModel.selectedItemId == itemInfo.item.id else { return }  // Só anima se for o item selecionado
+                                guard viewModel.selectedItemId == itemInfo.item.id else { return }
                                 withAnimation(.easeInOut(duration: 0.3)) {
                                     shakePosition = 0.6
                                 }
@@ -137,10 +137,40 @@ struct TaskListView: View {
                             .textFieldStyle(.plain)
                             .font(.system(size: baseNewItemSize * zoomLevel))
                             .focused($isNewItemFieldFocused)
+                            .onChange(of: viewModel.newItemText) { newValue in
+                                commandManager.processInput(newValue)
+                            }
                             .onSubmit {
-                                viewModel.commitNewItem()
+                                if case .active(let command) = commandManager.state,
+                                   let cmd = CommandManager.Command.allCases.first(where: { $0.rawValue == command }) {
+                                    commandManager.executeCommand(cmd)
+                                    viewModel.newItemText = ""
+                                } else {
+                                    viewModel.commitNewItem()
+                                }
                                 isNewItemFieldFocused = true
                             }
+                        
+                        if case .active(let input) = commandManager.state {
+                            VStack(alignment: .leading, spacing: 8) {
+                                ForEach(commandManager.filteredCommands(input), id: \.self) { command in
+                                    HStack {
+                                        Text(command.rawValue)
+                                            .font(.system(.body, design: .monospaced))
+                                        Text(command.description)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .padding(.vertical, 4)
+                                    .padding(.horizontal, 8)
+                                    .background(command.rawValue == input ? Color.accentColor.opacity(0.2) : Color.clear)
+                                    .cornerRadius(4)
+                                }
+                            }
+                            .padding(8)
+                            .background(.black)
+                            .cornerRadius(8)
+                            .offset(y: -40)
+                        }
                         
                         Spacer()
                         
@@ -195,6 +225,10 @@ struct TaskListView: View {
                 return .handled
             }
         }
+        .sheet(isPresented: $commandManager.showingSettings) {
+            SettingsView(settings: settings)
+        }
+        .accentColor(settings.accentColor)
     }
 }
 
