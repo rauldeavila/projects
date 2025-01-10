@@ -19,8 +19,20 @@ class TaskListViewModel: ObservableObject {
     @Published var isShowingDeleteConfirmation: Bool = false
     @Published var deleteConfirmationOption: DeleteOption = .yes
     
+    @ObservedObject var settings: AppSettings
+    
+    init(settings: AppSettings) {
+        self.settings = settings
+    }
+    
     // Status groups for cycling
-    private let taskStatuses: [ItemStatus] = ItemStatus.allCases.filter { !$0.isProjectStatus }
+    private var taskStatuses: [ItemStatus] {
+        let defaultStatuses = ItemStatus.allCases.filter { !$0.isProjectStatus }
+        let customStatuses = settings.customStatus.map {
+            ItemStatus.custom($0.rawValue, colorHex: $0.colorHex)
+        }
+        return defaultStatuses + customStatuses
+    }
 
     // Current focused item index
     private var currentIndex: Int? {

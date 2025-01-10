@@ -2,41 +2,46 @@ import Foundation
 import SwiftUI
 
 /// Represents the status of an item in the task management system
-enum ItemStatus: String, Codable, CaseIterable {
-    // Project-related status
-    case proj = "PROJ"
-    case subProj = "SUB-PROJ"
+struct ItemStatus: Codable, Hashable {
+    let rawValue: String
+    let isCustom: Bool
+    let colorHex: String?  // Adicionamos a cor diretamente no status
     
-    // Task-related status
-    case todo = "TODO"
-    case doing = "DOING"
-    case done = "DONE"
-    case someday = "SOMEDAY"
-    case maybe = "MAYBE"
-    case future = "FUTURE"
-    case read = "READ"
-    case bug = "BUG"
+    // Status padrão
+    static let proj = ItemStatus(rawValue: "PROJ", isCustom: false, colorHex: nil)
+    static let subProj = ItemStatus(rawValue: "SUB-PROJ", isCustom: false, colorHex: nil)
+    static let todo = ItemStatus(rawValue: "TODO", isCustom: false, colorHex: nil)
+    static let doing = ItemStatus(rawValue: "DOING", isCustom: false, colorHex: nil)
+    static let done = ItemStatus(rawValue: "DONE", isCustom: false, colorHex: nil)
+    static let someday = ItemStatus(rawValue: "SOMEDAY", isCustom: false, colorHex: nil)
+    static let maybe = ItemStatus(rawValue: "MAYBE", isCustom: false, colorHex: nil)
+    static let future = ItemStatus(rawValue: "FUTURE", isCustom: false, colorHex: nil)
+    
+    static let allCases: [ItemStatus] = [
+        .proj, .subProj, .todo, .doing, .done, .someday, .maybe, .future
+    ]
+    
+    var isProjectStatus: Bool {
+        self == .proj || self == .subProj
+    }
     
     var color: Color {
+        if let hex = colorHex {
+            return Color(hex: hex) ?? .gray
+        }
+        
         switch self {
-        case .todo: return .blue
-        case .doing: return .orange
-        case .done: return .green
-        case .proj, .subProj: return .purple
-        case .someday, .maybe, .future: return .gray
-        case .read: return .pink
-        case .bug: return .red
+        case ItemStatus.todo: return .blue
+        case ItemStatus.doing: return .orange
+        case ItemStatus.done: return .green
+        case ItemStatus.proj, ItemStatus.subProj: return .purple
+        case ItemStatus.someday, ItemStatus.maybe, ItemStatus.future: return .gray
+        default: return .gray
         }
     }
     
-    /// Returns true if the status is project-related
-    var isProjectStatus: Bool {
-        switch self {
-        case .proj, .subProj:
-            return true
-        default:
-            return false
-        }
+    static func custom(_ value: String, colorHex: String) -> ItemStatus {
+        ItemStatus(rawValue: value, isCustom: true, colorHex: colorHex)
     }
 }
 
@@ -206,6 +211,12 @@ struct Item: Identifiable, Codable {
         status = .done
         completedAt = Date()
         touch()
+    }
+}
+
+extension ItemStatus: Equatable {
+    static func == (lhs: ItemStatus, rhs: ItemStatus) -> Bool {
+        lhs.rawValue == rhs.rawValue && lhs.isCustom == rhs.isCustom
     }
 }
 

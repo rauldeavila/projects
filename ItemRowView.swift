@@ -11,6 +11,7 @@ struct ItemRowView: View {
     let fontSize: Double
     let statusFontSize: Double
     let level: Int
+    let settings: AppSettings
     let onToggleCollapse: () -> Void
     
     @State private var editingTitle: String = ""
@@ -37,14 +38,12 @@ struct ItemRowView: View {
             }
             
             // Status indicator
-            Text(item.status.rawValue)
-                .font(.system(size: statusFontSize, design: .monospaced))
-                .padding(.horizontal, 4)
-                .padding(.vertical, 2)
-                .foregroundStyle(statusColor.opacity(1))
-                .background(statusColor.opacity(0.2))
-                .cornerRadius(4)
-                .scaleEffect(statusScale)
+            settings.statusStyle.apply(
+                to: Text(item.status.rawValue),
+                color: statusColor,
+                fontSize: statusFontSize
+            )
+            .scaleEffect(statusScale)
             
             // Task counter
             if item.status == .proj || item.status == .subProj {

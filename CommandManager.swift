@@ -4,12 +4,15 @@ import SwiftUI
 class CommandManager: ObservableObject {
     /// Possíveis comandos
     enum Command: String, CaseIterable {
-        case settings = "/settings"
+        case color = "/color"
+        case status = "/status"
         
         var description: String {
             switch self {
-            case .settings:
-                return "Configure app settings"
+            case .color:
+                return "Configure app colors"
+            case .status:
+                return "Manage status syles and create new status"
             }
         }
     }
@@ -30,7 +33,8 @@ class CommandManager: ObservableObject {
     }
     
     @Published var state: State = .inactive
-    @Published var showingSettings = false
+    @Published var showingColorSettings = false
+    @Published var showingStatusSettings = false
     
     /// Processa o texto digitado para identificar comandos
     func processInput(_ text: String) {
@@ -49,8 +53,10 @@ class CommandManager: ObservableObject {
     /// Executa um comando
     func executeCommand(_ command: Command) {
         switch command {
-        case .settings:
-            showingSettings = true
+        case .color:
+            showingColorSettings = true
+        case .status:
+            showingStatusSettings = true
         }
     }
 }

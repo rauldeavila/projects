@@ -2,9 +2,9 @@ import SwiftUI
 
 /// Main view for the task list
 struct TaskListView: View {
-    @StateObject private var viewModel = TaskListViewModel()
     @StateObject private var settings = AppSettings()
     @StateObject private var commandManager = CommandManager()
+    @StateObject private var viewModel: TaskListViewModel
     @FocusState private var isNewItemFieldFocused: Bool
     @SceneStorage("zoomLevel") private var zoomLevel: Double = 1.0
     
@@ -14,9 +14,16 @@ struct TaskListView: View {
     private let maxZoom: Double = 2.0
     private let zoomStep: Double = 0.1
     
+    
     private let baseTitleSize: Double = 13.0
     private let baseStatusSize: Double = 11.0
     private let baseNewItemSize: Double = 13.0
+        
+    init() {
+        let settings = AppSettings()
+        _settings = StateObject(wrappedValue: settings)
+        _viewModel = StateObject(wrappedValue: TaskListViewModel(settings: settings))
+    }
     
     var body: some View {
         ScrollViewReader { proxy in
@@ -38,6 +45,7 @@ struct TaskListView: View {
                                 fontSize: baseTitleSize * zoomLevel,
                                 statusFontSize: baseStatusSize * zoomLevel,
                                 level: itemInfo.level,
+                                settings: settings,
                                 onToggleCollapse: {
                                     if itemInfo.item.id == viewModel.selectedItemId {
                                         viewModel.toggleSelectedItemCollapse()
@@ -225,8 +233,11 @@ struct TaskListView: View {
                 return .handled
             }
         }
-        .sheet(isPresented: $commandManager.showingSettings) {
+        .sheet(isPresented: $commandManager.showingColorSettings) {
             SettingsView(settings: settings)
+        }
+        .sheet(isPresented: $commandManager.showingStatusSettings) {
+            StatusSettingsView(settings: settings)
         }
         .accentColor(settings.accentColor)
     }
