@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 /// Represents the status of an item in the task management system
 enum ItemStatus: String, Codable, CaseIterable {
@@ -13,6 +14,20 @@ enum ItemStatus: String, Codable, CaseIterable {
     case someday = "SOMEDAY"
     case maybe = "MAYBE"
     case future = "FUTURE"
+    case read = "READ"
+    case bug = "BUG"
+    
+    var color: Color {
+        switch self {
+        case .todo: return .blue
+        case .doing: return .orange
+        case .done: return .green
+        case .proj, .subProj: return .purple
+        case .someday, .maybe, .future: return .gray
+        case .read: return .pink
+        case .bug: return .red
+        }
+    }
     
     /// Returns true if the status is project-related
     var isProjectStatus: Bool {

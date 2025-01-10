@@ -20,8 +20,8 @@ class TaskListViewModel: ObservableObject {
     @Published var deleteConfirmationOption: DeleteOption = .yes
     
     // Status groups for cycling
-    private let taskStatuses: [ItemStatus] = [.todo, .doing, .someday, .maybe, .future, .done]
-    
+    private let taskStatuses: [ItemStatus] = ItemStatus.allCases.filter { !$0.isProjectStatus }
+
     // Current focused item index
     private var currentIndex: Int? {
         if let selectedId = selectedItemId {

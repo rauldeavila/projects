@@ -41,6 +41,7 @@ struct ItemRowView: View {
                 .font(.system(size: statusFontSize, design: .monospaced))
                 .padding(.horizontal, 4)
                 .padding(.vertical, 2)
+                .foregroundStyle(statusColor.opacity(1))
                 .background(statusColor.opacity(0.2))
                 .cornerRadius(4)
                 .scaleEffect(statusScale)
@@ -115,13 +116,7 @@ struct ItemRowView: View {
     }
     
     private var statusColor: Color {
-        switch item.status {
-        case .todo: return .blue
-        case .doing: return .orange
-        case .done: return .green
-        case .proj, .subProj: return .purple
-        case .someday, .maybe, .future: return .gray
-        }
+        item.status.color
     }
 }
 
