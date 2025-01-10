@@ -34,7 +34,7 @@ struct ItemStatus: Codable, Hashable {
         case ItemStatus.todo: return .blue
         case ItemStatus.doing: return .orange
         case ItemStatus.done: return .green
-        case ItemStatus.proj, ItemStatus.subProj: return .purple
+        case ItemStatus.proj, ItemStatus.subProj: return .white
         case ItemStatus.someday, ItemStatus.maybe, ItemStatus.future: return .gray
         default: return .gray
         }
@@ -81,22 +81,24 @@ struct Item: Identifiable, Codable {
     
     /// Initialize a new item
     init(
-        id: UUID = UUID(),
-        title: String,
-        status: ItemStatus = .todo,
-        subItems: [Item]? = nil,
-        createdAt: Date = Date(),
-        modifiedAt: Date = Date(),
-        completedAt: Date? = nil
-    ) {
-        self.id = id
-        self.title = title
-        self.status = status
-        self.subItems = subItems
-        self.createdAt = createdAt
-        self.modifiedAt = modifiedAt
-        self.completedAt = completedAt
-    }
+         id: UUID = UUID(),
+         title: String,
+         isCollapsed: Bool = false,
+         status: ItemStatus = .todo,
+         subItems: [Item]? = nil,
+         createdAt: Date = Date(),
+         modifiedAt: Date = Date(),
+         completedAt: Date? = nil
+     ) {
+         self.id = id
+         self.title = title
+         self.isCollapsed = isCollapsed
+         self.status = status
+         self.subItems = subItems
+         self.createdAt = createdAt
+         self.modifiedAt = modifiedAt
+         self.completedAt = completedAt
+     }
     
     /// Returns the nesting level of this item (0-3)
     var nestingLevel: Int {

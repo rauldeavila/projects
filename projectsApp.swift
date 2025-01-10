@@ -11,6 +11,10 @@ import SwiftData
 @main
 struct ProjectsApp: App {
     init() {
+        // Destrói completamente o store antes de iniciar
+//        PersistenceManager.destroyPersistentStore()
+        
+        // Inicializa o singleton do AppSettings
         AppSettings.shared = AppSettings()
     }
     

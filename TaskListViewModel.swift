@@ -1,4 +1,5 @@
 import SwiftUI
+import OSLog
 
 struct FlattenedItem: Identifiable {
     let id = UUID()
@@ -8,7 +9,13 @@ struct FlattenedItem: Identifiable {
 
 /// View model to manage the task list state
 class TaskListViewModel: ObservableObject {
-    @Published var items: [Item] = []
+
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "projects", category: "view-model")
+
+    @Published private(set) var items: [Item] = []
+    private var needsSave = false
+    private var saveTask: Task<Void, Never>?
+    
     @Published var editingItemId: UUID?
     @Published var newItemText: String = ""
     @Published var selectedItemId: UUID?
@@ -21,16 +28,10 @@ class TaskListViewModel: ObservableObject {
     
     @ObservedObject var settings: AppSettings
     
+    
     init(settings: AppSettings) {
         self.settings = settings
         loadItems()
-        
-        // Observa mudanças de persistência
-        Task { @MainActor in
-            for await _ in PersistenceManager.shared.$itemsChanged.values {
-                loadItems()
-            }
-        }
     }
     
     // Status groups for cycling
@@ -42,30 +43,47 @@ class TaskListViewModel: ObservableObject {
         return defaultStatuses + customStatuses
     }
     
-    // MARK: - Private Methods
-    
-    private func loadItems() {
-        do {
-            items = try PersistenceManager.shared.loadItems()
-        } catch {
-            print("Failed to load items: \(error)")
-        }
-    }
-    
-    private func saveItems() {
+    private func saveChanges() {
+        logger.debug("Saving changes. Current items count: \(self.items.count)")
         do {
             try PersistenceManager.shared.saveItems(items)
+            logger.debug("Successfully saved items")
         } catch {
-            print("Failed to save items: \(error)")
+            logger.error("Failed to save items: \(error.localizedDescription)")
         }
     }
     
-    // MARK: - Public Methods
+    private func enqueueSave() {
+        needsSave = true
+        
+        // Cancela qualquer tarefa de salvamento pendente
+        saveTask?.cancel()
+        
+        // Cria uma nova tarefa de salvamento
+        saveTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 500_000_000) // 500ms delay
+            
+            guard !Task.isCancelled && needsSave else { return }
+            
+            do {
+                try PersistenceManager.shared.saveItems(items)
+                needsSave = false
+            } catch {
+                logger.error("Failed to save items: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    func updateItems(_ newItems: [Item]) {
+        items = newItems
+        enqueueSave()
+    }
     
     func addItem(_ title: String) {
+        var currentItems = items
         let newItem = Item(title: title)
-        items.append(newItem)
-        saveItems()
+        currentItems.append(newItem)
+        updateItems(currentItems)
     }
     
     func commitNewItem() {
@@ -74,6 +92,15 @@ class TaskListViewModel: ObservableObject {
         newItemText = ""
         editingItemId = nil
     }
+    
+    private func loadItems() {
+        do {
+            items = try PersistenceManager.shared.loadItems()
+        } catch {
+            logger.error("Failed to load items: \(error.localizedDescription)")
+        }
+    }
+    
     
     func updateItemTitle(_ id: UUID, newTitle: String) {
         func updateTitle(in items: inout [Item]) -> Bool {
@@ -97,7 +124,7 @@ class TaskListViewModel: ObservableObject {
         var updatedItems = items
         if updateTitle(in: &updatedItems) {
             items = updatedItems
-            saveItems()
+            saveChanges()
         }
         editingItemId = nil
     }
@@ -128,7 +155,7 @@ class TaskListViewModel: ObservableObject {
         var updatedItems = items
         if deleteItem(in: &updatedItems) {
             items = updatedItems
-            saveItems()
+            saveChanges()
             editingItemId = nil
             isShowingDeleteConfirmation = false
         }
@@ -240,7 +267,7 @@ class TaskListViewModel: ObservableObject {
             item.touch()
         }
         
-        saveItems()
+        saveChanges()
     }
     
     private func updateItemInHierarchy(itemId: UUID, action: (inout Item) -> Void) {
@@ -273,9 +300,7 @@ class TaskListViewModel: ObservableObject {
         newItemText = ""
         editingItemId = nil
     }
-    
-    // MARK: - Indentation Functions
-        
+
     func indentSelectedItem() {
         let flatList = buildFlattenedList(items: items)
         guard let selectedId = selectedItemId,
@@ -291,7 +316,6 @@ class TaskListViewModel: ObservableObject {
             showShakeAnimation()
             return
         }
-        
         
         // Procura o item pai adequado (primeiro item acima no mesmo nível)
         var potentialParentIndex = currentItemIndex - 1
@@ -353,8 +377,6 @@ class TaskListViewModel: ObservableObject {
                 if items[index].id == parentId {
                     // Atualiza o status do novo pai se necessário
                     if items[index].isTask {
-                        // Se estamos no nível 0, o pai vira PROJ
-                        // Se estamos no nível 1, o pai vira SUBPROJ
                         items[index].status = parentItem.level == 0 ? .proj : .subProj
                         items[index].touch()
                     }
@@ -411,8 +433,10 @@ class TaskListViewModel: ObservableObject {
         var updatedItems = items
         if indent(in: &updatedItems, parentId: parentItem.item.id) {
             items = updatedItems
+            saveChanges() // Salva as alterações
         }
     }
+
 
     func dedentSelectedItem() {
         let flatList = buildFlattenedList(items: items)
@@ -422,13 +446,10 @@ class TaskListViewModel: ObservableObject {
             return
         }
 
-        // Função recursiva para encontrar e remover o item de sua posição atual
-        // Retorna o item removido e seu pai
         func findParentInfo(in items: inout [Item]) -> (item: Item, currentParent: Item)? {
             for index in items.indices {
                 if let subItems = items[index].subItems,
                    let childIndex = subItems.firstIndex(where: { $0.id == selectedId }) {
-                    // Encontramos o item e seu pai
                     var parent = items[index]
                     var child = parent.subItems!.remove(at: childIndex)
                     
@@ -437,7 +458,6 @@ class TaskListViewModel: ObservableObject {
                         child.touch()
                     }
                     
-                    // Se o pai ficou sem filhos, volta para task
                     if parent.subItems!.isEmpty {
                         parent.status = .todo
                     }
@@ -446,7 +466,6 @@ class TaskListViewModel: ObservableObject {
                     return (child, parent)
                 }
                 
-                // Procura recursivamente nos subitems
                 if var subItems = items[index].subItems {
                     if let found = findParentInfo(in: &subItems) {
                         items[index].subItems = subItems
@@ -459,16 +478,13 @@ class TaskListViewModel: ObservableObject {
 
         var updatedItems = items
         if let (removedItem, currentParent) = findParentInfo(in: &updatedItems) {
-            // Função para adicionar o item ao novo pai
             func addToNewParent(item: Item, in items: inout [Item], parentId: UUID) -> Bool {
                 for index in items.indices {
                     if items[index].id == parentId {
-                        // Encontramos o novo pai (o avô), adicionamos o item como seu filho
                         try? items[index].addSubItem(removedItem)
                         return true
                     }
                     
-                    // Procura recursivamente nos subitems
                     if var subItems = items[index].subItems {
                         if addToNewParent(item: item, in: &subItems, parentId: parentId) {
                             items[index].subItems = subItems
@@ -479,24 +495,22 @@ class TaskListViewModel: ObservableObject {
                 return false
             }
             
-            // Procura o pai do pai (avô) na lista plana
             if let grandParentInfo = flatList.first(where: {
                 if let subItems = $0.item.subItems {
                     return subItems.contains(where: { $0.id == currentParent.id })
                 }
                 return false
             }) {
-                // Adiciona o item removido como filho do avô
                 _ = addToNewParent(item: removedItem, in: &updatedItems, parentId: grandParentInfo.item.id)
                 items = updatedItems
                 selectedItemId = removedItem.id
             } else {
-                // Se não encontrou o avô, então o pai é de nível 0
-                // Neste caso, adicionamos o item na raiz
                 updatedItems.append(removedItem)
                 items = updatedItems
                 selectedItemId = removedItem.id
             }
+            
+            saveChanges() // Salva as alterações
         } else {
             showShakeAnimation()
         }
@@ -589,7 +603,7 @@ extension TaskListViewModel {
         if toggleCollapse(in: &updatedItems) {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                 items = updatedItems
-                saveItems()
+                saveChanges()
             }
         }
     }
@@ -719,18 +733,19 @@ extension TaskListViewModel {
         guard let selectedId = selectedItemId,
               let currentItem = flatList.first(where: { $0.item.id == selectedId }) else { return }
         
-        // Função recursiva para mover item em qualquer nível
         func moveUp(in items: inout [Item]) -> Bool {
             for parentIndex in items.indices {
                 if items[parentIndex].id == selectedId && parentIndex > 0 {
-                    // Move no nível atual
                     items.swapAt(parentIndex, parentIndex - 1)
+                    items[parentIndex].touch()
+                    items[parentIndex - 1].touch()
                     return true
                 }
                 
                 if var subItems = items[parentIndex].subItems {
                     if moveUp(in: &subItems) {
                         items[parentIndex].subItems = subItems
+                        items[parentIndex].touch()
                         return true
                     }
                 }
@@ -741,27 +756,28 @@ extension TaskListViewModel {
         var updatedItems = items
         if moveUp(in: &updatedItems) {
             items = updatedItems
+            saveChanges()
         }
     }
 
-    /// Move a hierarquia selecionada para baixo
     func moveSelectedHierarchyDown() {
         let flatList = buildFlattenedList(items: items)
         guard let selectedId = selectedItemId,
               let currentItem = flatList.first(where: { $0.item.id == selectedId }) else { return }
         
-        // Função recursiva para mover item em qualquer nível
         func moveDown(in items: inout [Item]) -> Bool {
             for parentIndex in items.indices {
                 if items[parentIndex].id == selectedId && parentIndex < items.count - 1 {
-                    // Move no nível atual
                     items.swapAt(parentIndex, parentIndex + 1)
+                    items[parentIndex].touch()
+                    items[parentIndex + 1].touch()
                     return true
                 }
                 
                 if var subItems = items[parentIndex].subItems {
                     if moveDown(in: &subItems) {
                         items[parentIndex].subItems = subItems
+                        items[parentIndex].touch()
                         return true
                     }
                 }
@@ -772,6 +788,7 @@ extension TaskListViewModel {
         var updatedItems = items
         if moveDown(in: &updatedItems) {
             items = updatedItems
+            saveChanges()
         }
     }
 }

@@ -1,12 +1,14 @@
 import SwiftUI
 import SwiftData
+import OSLog
 
 @MainActor
 class PersistenceManager: ObservableObject {
     static let shared = PersistenceManager()
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "projects", category: "persistence")
     
-    private let modelContainer: ModelContainer
-    private let modelContext: ModelContext
+    private var modelContainer: ModelContainer
+    private var modelContext: ModelContext
     
     @Published var itemsChanged = false
     @Published var settingsChanged = false
@@ -15,7 +17,9 @@ class PersistenceManager: ObservableObject {
         do {
             let schema = Schema([
                 ItemModel.self,
-                AppData.self
+                AppData.self,
+                CustomColorModel.self,
+                CustomStatusModel.self
             ])
             
             let modelConfiguration = ModelConfiguration(
@@ -37,6 +41,8 @@ class PersistenceManager: ObservableObject {
                 object: modelContext
             )
             
+            ensureAppDataExists()
+            
         } catch {
             fatalError("Failed to create ModelContainer: \(error.localizedDescription)")
         }
@@ -45,7 +51,6 @@ class PersistenceManager: ObservableObject {
     @objc private func contextObjectsDidChange(_ notification: Notification) {
         guard let userInfo = notification.userInfo else { return }
         
-        // Verifica se houve alterações em ItemModel
         let itemChanges = [
             NSInsertedObjectsKey,
             NSUpdatedObjectsKey,
@@ -54,7 +59,6 @@ class PersistenceManager: ObservableObject {
             (userInfo[key] as? Set<NSManagedObject>)?.contains { $0 is ItemModel } ?? false
         }
         
-        // Verifica se houve alterações em AppData
         let settingsChanges = [
             NSInsertedObjectsKey,
             NSUpdatedObjectsKey,
@@ -71,61 +75,22 @@ class PersistenceManager: ObservableObject {
         }
     }
     
-    // MARK: - Items
-    
-    func saveItems(_ items: [Item]) throws {
-        let descriptor = FetchDescriptor<ItemModel>()
-        let existingItems = try modelContext.fetch(descriptor)
-        existingItems.forEach { modelContext.delete($0) }
-        
-        func createItemModel(_ item: Item) -> ItemModel {
-            let model = ItemModel(
-                id: item.id,
-                title: item.title,
-                isCollapsed: item.isCollapsed,
-                status: item.status,
-                createdAt: item.createdAt,
-                modifiedAt: item.modifiedAt,
-                completedAt: item.completedAt
-            )
-            
-            if let subItems = item.subItems {
-                model.subItems = subItems.map { createItemModel($0) }
-            }
-            
-            return model
-        }
-        
-        items.forEach { item in
-            let model = createItemModel(item)
-            modelContext.insert(model)
-        }
-        
-        try modelContext.save()
-    }
-    
-    func loadItems() throws -> [Item] {
-        let descriptor = FetchDescriptor<ItemModel>(
-            sortBy: [SortDescriptor(\.createdAt)]
-        )
-        let models = try modelContext.fetch(descriptor)
-        
-        func createItem(_ model: ItemModel) -> Item {
-            Item(
-                id: model.id,
-                title: model.title,
-                status: model.status,
-                subItems: model.subItems?.map { createItem($0) },
-                createdAt: model.createdAt,
-                modifiedAt: model.modifiedAt,
-                completedAt: model.completedAt
-            )
-        }
-        
-        return models.map { createItem($0) }
-    }
-    
     // MARK: - Settings
+    
+    private func ensureAppDataExists() {
+        do {
+            let descriptor = FetchDescriptor<AppData>()
+            let existingData = try modelContext.fetch(descriptor)
+            
+            if existingData.isEmpty {
+                let appData = AppData()
+                modelContext.insert(appData)
+                try modelContext.save()
+            }
+        } catch {
+            logger.error("Failed to ensure AppData exists: \(error.localizedDescription)")
+        }
+    }
     
     func saveSettings(
         selectedColorName: String,
@@ -146,8 +111,12 @@ class PersistenceManager: ObservableObject {
         
         appData.selectedColorName = selectedColorName
         appData.statusStyle = StatusStyle.allCases.firstIndex(of: statusStyle) ?? 0
-        appData.customColors = customColors
-        appData.customStatus = customStatus
+        
+        // Converte e salva as cores personalizadas
+        appData.customColors = customColors.map { CustomColorModel.fromDomain($0) }
+        
+        // Converte e salva os status personalizados
+        appData.customStatus = customStatus.map { CustomStatusModel.fromDomain($0) }
         
         try modelContext.save()
     }
@@ -163,9 +132,160 @@ class PersistenceManager: ObservableObject {
         
         return (
             selectedColorName: appData.selectedColorName,
-            customColors: appData.customColors,
-            customStatus: appData.customStatus,
+            customColors: appData.customColors.map { $0.toDomain },
+            customStatus: appData.customStatus.map { $0.toDomain },
             statusStyle: StatusStyle.allCases[appData.statusStyle]
         )
+    }
+}
+
+extension PersistenceManager {
+    static func destroyPersistentStore() {
+        // Obtém o URL do diretório de aplicativos de suporte
+        guard let supportDirectory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return
+        }
+        
+        let storeDirectory = supportDirectory.appendingPathComponent("default.store")
+        
+        do {
+            // Remove todo o diretório do store
+            try FileManager.default.removeItem(at: storeDirectory)
+        } catch {
+            print("Failed to remove store: \(error)")
+        }
+    }
+    
+    func resetAllData() throws {
+        // Primeiro destruímos o store
+        Self.destroyPersistentStore()
+        
+        // Recriamos o container
+        let schema = Schema([
+            ItemModel.self,
+            AppData.self,
+            CustomColorModel.self,
+            CustomStatusModel.self
+        ])
+        
+        let modelConfiguration = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: false
+        )
+        
+        // Recria o container
+        modelContainer = try ModelContainer(
+            for: schema,
+            configurations: [modelConfiguration]
+        )
+        modelContext = modelContainer.mainContext
+        
+        // Inicializa com dados padrão
+        let newAppData = AppData()
+        modelContext.insert(newAppData)
+        try modelContext.save()
+    }
+}
+
+@MainActor
+extension PersistenceManager {
+    func saveItems(_ items: [Item]) throws {
+        do {
+            // 1. Get all existing items
+            let descriptor = FetchDescriptor<ItemModel>()
+            let existingModels = try modelContext.fetch(descriptor)
+            
+            // 2. Create a map of existing models by ID
+            let modelMap = Dictionary(uniqueKeysWithValues: existingModels.map { ($0.id, $0) })
+            
+            // 3. Track valid IDs
+            var validIds = Set<UUID>()
+            
+            // 4. Recursive function to process items and their children
+            func processItem(_ item: Item, order: Int, parent: ItemModel?) -> ItemModel {
+                if let existingModel = modelMap[item.id] {
+                    // Update existing model
+                    existingModel.title = item.title
+                    existingModel.isCollapsed = item.isCollapsed
+                    existingModel.statusRawValue = item.status.rawValue
+                    existingModel.statusIsCustom = item.status.isCustom
+                    existingModel.statusColorHex = item.status.colorHex
+                    existingModel.createdAt = item.createdAt
+                    existingModel.modifiedAt = item.modifiedAt
+                    existingModel.completedAt = item.completedAt
+                    existingModel.order = order
+                    existingModel.parent = parent
+                    
+                    // Process sub-items if they exist
+                    if let subItems = item.subItems {
+                        let subModels = subItems.enumerated().map { index, subItem in
+                            processItem(subItem, order: index, parent: existingModel)
+                        }
+                        existingModel.subItems = subModels
+                    } else {
+                        existingModel.subItems = nil
+                    }
+                    
+                    validIds.insert(item.id)
+                    return existingModel
+                    
+                } else {
+                    // Create new model
+                    let newModel = ItemModel(item: item, order: order)
+                    newModel.parent = parent
+                    modelContext.insert(newModel)
+                    
+                    // Process sub-items if they exist
+                    if let subItems = item.subItems {
+                        let subModels = subItems.enumerated().map { index, subItem in
+                            processItem(subItem, order: index, parent: newModel)
+                        }
+                        newModel.subItems = subModels
+                    }
+                    
+                    validIds.insert(item.id)
+                    return newModel
+                }
+            }
+            
+            // 5. Process all root items with their order
+            let _ = items.enumerated().map { index, item in
+                processItem(item, order: index, parent: nil)
+            }
+            
+            // 6. Delete models that are no longer valid
+            for model in existingModels where !validIds.contains(model.id) {
+                modelContext.delete(model)
+            }
+            
+            // 7. Save changes
+            try modelContext.save()
+            logger.debug("Successfully saved \(items.count) root items")
+            
+        } catch {
+            logger.error("Failed to save items: \(error.localizedDescription)")
+            throw error
+        }
+    }
+    
+    func loadItems() throws -> [Item] {
+        do {
+            // Create a descriptor that sorts by order
+            let descriptor = FetchDescriptor<ItemModel>(
+                sortBy: [SortDescriptor(\ItemModel.order)]
+            )
+            
+            let models = try modelContext.fetch(descriptor)
+            
+            // Find root items (those without parents) and convert to domain objects
+            let rootModels = models.filter { $0.parent == nil }
+                                 .sorted(by: { $0.order < $1.order })
+            
+            return rootModels.map { $0.toDomain }
+            
+        } catch {
+            logger.error("Failed to load items: \(error.localizedDescription)")
+            throw error
+        }
     }
 }
