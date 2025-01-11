@@ -41,6 +41,7 @@ struct ItemRowView: View {
             settings.statusStyle.apply(
                 to: Text(item.status.rawValue),
                 color: statusColor,
+                status: item.status,
                 fontSize: statusFontSize
             )
             .scaleEffect(statusScale)

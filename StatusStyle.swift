@@ -12,18 +12,33 @@ struct CustomStatus: Codable, Identifiable {
     }
 }
 
+
 enum StatusStyle: String, Codable, CaseIterable {
     case system = "System"
     case neutral = "Neutral"
     case black = "Black"
     case white = "White"
     
-    func apply(to text: Text, color: Color, fontSize: Double) -> some View {
+    func apply(to text: Text, color: Color, status: ItemStatus, fontSize: Double) -> some View {
         let baseText = text
             .font(.system(size: fontSize, design: .monospaced))
             .padding(.horizontal, 4)
             .padding(.vertical, 2)
         
+        // Special handling for project statuses
+        if status == .proj {
+            return AnyView(baseText
+                .foregroundStyle(.white)
+                .background(.black)
+                .cornerRadius(4))
+        } else if status == .subProj {
+            return AnyView(baseText
+                .foregroundStyle(.gray)
+                .background(.black)
+                .cornerRadius(4))
+        }
+        
+        // Regular status styling
         switch self {
         case .system:
             return AnyView(baseText

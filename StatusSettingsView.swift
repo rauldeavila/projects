@@ -130,6 +130,7 @@ struct StatusStylePreview: View {
             style.apply(
                 to: Text("SAMPLE"),
                 color: .blue,
+                status: .todo, // Usando .todo como exemplo
                 fontSize: 11
             )
             
@@ -157,6 +158,7 @@ struct CustomStatusView: View {
                     style.apply(
                         to: Text(status.rawValue),
                         color: status.color,
+                        status: .todo,
                         fontSize: 11
                     )
                     
@@ -241,6 +243,7 @@ struct AddCustomStatusView: View {
                         style.apply(
                             to: Text(rawValue.isEmpty ? "STATUS" : rawValue),
                             color: selectedColor,
+                            status: ItemStatus.custom(rawValue.isEmpty ? "STATUS" : rawValue, colorHex: hex),
                             fontSize: 11
                         )
                     }
