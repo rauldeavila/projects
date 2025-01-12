@@ -28,20 +28,50 @@ final class CustomStatusModel {
     var name: String
     var rawValue: String
     var colorHex: String
+    var category: String
+    var order: Int
+    var isDefault: Bool
     
-    init(id: UUID = UUID(), name: String, rawValue: String, colorHex: String) {
+    init(
+        id: UUID = UUID(),
+        name: String,
+        rawValue: String,
+        colorHex: String,
+        category: String,
+        order: Int,
+        isDefault: Bool
+    ) {
         self.id = id
         self.name = name
         self.rawValue = rawValue
         self.colorHex = colorHex
+        self.category = category
+        self.order = order
+        self.isDefault = isDefault
     }
     
     var toDomain: CustomStatus {
-        CustomStatus(id: id, name: name, rawValue: rawValue, colorHex: colorHex)
+        CustomStatus(
+            id: id,
+            name: name,
+            rawValue: rawValue,
+            colorHex: colorHex,
+            category: StatusCategory(rawValue: category) ?? .task,
+            order: order,
+            isDefault: isDefault
+        )
     }
     
     static func fromDomain(_ status: CustomStatus) -> CustomStatusModel {
-        CustomStatusModel(id: status.id, name: status.name, rawValue: status.rawValue, colorHex: status.colorHex)
+        CustomStatusModel(
+            id: status.id,
+            name: status.name,
+            rawValue: status.rawValue,
+            colorHex: status.colorHex,
+            category: status.category.rawValue,
+            order: status.order,
+            isDefault: status.isDefault
+        )
     }
 }
 

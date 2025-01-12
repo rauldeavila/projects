@@ -137,18 +137,111 @@ class AppSettings: ObservableObject {
         }
     }
 
-    func addCustomStatus(name: String, rawValue: String, colorHex: String) -> Bool {
+//    func addCustomStatus(name: String, rawValue: String, colorHex: String) -> Bool {
+//        // Verifica se já existe um status com este nome ou rawValue
+//        guard !customStatus.contains(where: { $0.name == name || $0.rawValue == rawValue }) else {
+//            return false
+//        }
+//        
+//        let newStatus = CustomStatus(id: UUID(), name: name, rawValue: rawValue, colorHex: colorHex)
+//        customStatus.append(newStatus)
+//        return true
+//    }
+
+//    func removeCustomStatus(id: UUID) {
+//        customStatus.removeAll { $0.id == id }
+//    }
+    
+    // Métodos auxiliares para acessar status por categoria
+    func getStatus(for category: StatusCategory) -> [CustomStatus] {
+        let defaultStatus = CustomStatus.defaultStatus(for: category)
+        let categoryStatus = customStatus
+            .filter { $0.category == category }
+            .sorted { $0.order < $1.order }
+        
+        return [defaultStatus] + categoryStatus
+    }
+    
+    func nextAvailableOrder(for category: StatusCategory) -> Int {
+        let maxOrder = customStatus
+            .filter { $0.category == category }
+            .map { $0.order }
+            .max() ?? -1
+        return maxOrder + 1
+    }
+    
+    // Adiciona um novo status customizado
+    func addCustomStatus(
+        name: String,
+        rawValue: String,
+        colorHex: String,
+        category: StatusCategory
+    ) -> Bool {
         // Verifica se já existe um status com este nome ou rawValue
         guard !customStatus.contains(where: { $0.name == name || $0.rawValue == rawValue }) else {
             return false
         }
         
-        let newStatus = CustomStatus(id: UUID(), name: name, rawValue: rawValue, colorHex: colorHex)
+        let order = nextAvailableOrder(for: category)
+        let newStatus = CustomStatus(
+            id: UUID(),
+            name: name,
+            rawValue: rawValue,
+            colorHex: colorHex,
+            category: category,
+            order: order,
+            isDefault: false
+        )
+        
         customStatus.append(newStatus)
         return true
     }
-
+    
+    // Remove um status customizado
     func removeCustomStatus(id: UUID) {
+        guard let status = customStatus.first(where: { $0.id == id }),
+              !status.isDefault else {
+            return
+        }
+        
+        let category = status.category
+        let oldOrder = status.order
+        
+        // Remove o status
         customStatus.removeAll { $0.id == id }
+        
+        // Reordena os status restantes da mesma categoria
+        customStatus = customStatus.map { status in
+            if status.category == category && status.order > oldOrder {
+                var updated = status
+                updated.order -= 1
+                return updated
+            }
+            return status
+        }
+    }
+    
+    // Atualiza a ordem dos status em uma categoria
+    func updateOrder(in category: StatusCategory, oldIndex: Int, newIndex: Int) {
+        var categoryStatus = getStatus(for: category)
+        guard oldIndex != newIndex,
+              oldIndex >= 0, oldIndex < categoryStatus.count,
+              newIndex >= 0, newIndex < categoryStatus.count else {
+            return
+        }
+        
+        let movedStatus = categoryStatus.remove(at: oldIndex)
+        categoryStatus.insert(movedStatus, at: newIndex)
+        
+        // Atualiza a ordem de todos os status não-padrão
+        let updatedStatus = categoryStatus.enumerated().compactMap { index, status -> CustomStatus? in
+            guard !status.isDefault else { return nil }
+            var updated = status
+            updated.order = index - 1 // -1 porque o status padrão é sempre o primeiro
+            return updated
+        }
+        
+        // Atualiza apenas os status da categoria modificada
+        customStatus = customStatus.filter { $0.category != category } + updatedStatus
     }
 }

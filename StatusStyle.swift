@@ -1,17 +1,68 @@
 // CustomStatus.swift
 import SwiftUI
 
+enum StatusCategory: String, Codable, CaseIterable {
+    case firstLevel = "First Level"
+    case intermediate = "Intermediate"
+    case task = "Task"
+}
+
 struct CustomStatus: Codable, Identifiable {
     let id: UUID
     var name: String
     var rawValue: String
     var colorHex: String
+    var category: StatusCategory
+    var order: Int
+    var isDefault: Bool
     
     var color: Color {
         Color(hex: colorHex) ?? .gray
     }
+    
+    // Status padrão do sistema
+    static let project = CustomStatus(
+        id: UUID(),
+        name: "Project",
+        rawValue: "PROJECT",
+        colorHex: "#000000",
+        category: .firstLevel,
+        order: 0,
+        isDefault: true
+    )
+    
+    static let subproject = CustomStatus(
+        id: UUID(),
+        name: "Subproject",
+        rawValue: "SUBPROJECT",
+        colorHex: "#808080",
+        category: .intermediate,
+        order: 0,
+        isDefault: true
+    )
+    
+    static let todo = CustomStatus(
+        id: UUID(),
+        name: "Todo",
+        rawValue: "TODO",
+        colorHex: "#0000FF",
+        category: .task,
+        order: 0,
+        isDefault: true
+    )
+    
+    // Status padrão por categoria
+    static func defaultStatus(for category: StatusCategory) -> CustomStatus {
+        switch category {
+        case .firstLevel:
+            return project
+        case .intermediate:
+            return subproject
+        case .task:
+            return todo
+        }
+    }
 }
-
 
 enum StatusStyle: String, Codable, CaseIterable {
     case system = "System"
@@ -25,20 +76,16 @@ enum StatusStyle: String, Codable, CaseIterable {
             .padding(.horizontal, 4)
             .padding(.vertical, 2)
         
-        // Special handling for project statuses
-        if status == .proj {
+        // Mantém o estilo especial para PROJECT e SUBPROJECT
+        if status.isHierarchyStatus {
+            let isSubproject = status.category == .intermediate
             return AnyView(baseText
-                .foregroundStyle(.white)
-                .background(.black)
-                .cornerRadius(4))
-        } else if status == .subProj {
-            return AnyView(baseText
-                .foregroundStyle(.gray)
+                .foregroundStyle(isSubproject ? .gray : .white)
                 .background(.black)
                 .cornerRadius(4))
         }
         
-        // Regular status styling
+        // Estilo normal para tasks
         switch self {
         case .system:
             return AnyView(baseText
@@ -62,3 +109,4 @@ enum StatusStyle: String, Codable, CaseIterable {
         }
     }
 }
+

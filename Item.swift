@@ -222,6 +222,29 @@ extension ItemStatus: Equatable {
     }
 }
 
+extension ItemStatus {
+    var category: StatusCategory {
+        if isCustom {
+            // Para status customizados, precisamos buscar a categoria no AppSettings
+            // Isso será implementado depois
+            return .task
+        }
+        
+        switch self {
+        case .proj:
+            return .firstLevel
+        case .subProj:
+            return .intermediate
+        default:
+            return .task
+        }
+    }
+    
+    var isHierarchyStatus: Bool {
+        category == .firstLevel || category == .intermediate
+    }
+}
+
 extension Item {
     /// Returns the count of completed and total direct tasks
     var taskCounts: (completed: Int, total: Int) {

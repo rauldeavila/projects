@@ -1,13 +1,14 @@
-// StatusSettingsView.swift
 import SwiftUI
 
 struct StatusSettingsView: View {
     @ObservedObject var settings: AppSettings
     @Environment(\.dismiss) var dismiss
-    @State private var isAddingStatus = false
     @State private var showingError = false
     @State private var errorMessage = ""
     @State private var selectedStyleIndex = 0
+    @State private var draggedStatus: CustomStatus?
+    
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 16), count: 3)
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -34,41 +35,23 @@ struct StatusSettingsView: View {
                     }
                 }
             }
-            .background(
-                KeyboardNavigationView { event in
-                    handleKeyboardNavigation(event)
-                }
-            )
             
-            // Custom Status Section
-            HStack {
-                Text("Custom Status")
-                    .font(.headline)
-                
-                Spacer()
-                
-                Button("Add Status") {
-                    isAddingStatus = true
-                }
-                .buttonStyle(.plain)
-                .foregroundColor(.accentColor)
-            }
-            
-            ScrollView {
-                LazyVGrid(columns: [
-                    GridItem(.adaptive(minimum: 150, maximum: 200), spacing: 12)
-                ], spacing: 12) {
-                    ForEach(settings.customStatus) { status in
-                        CustomStatusView(
-                            status: status,
-                            style: settings.statusStyle,
-                            onDelete: {
-                                settings.removeCustomStatus(id: status.id)
-                            }
-                        )
-                    }
+            // Status Categories Grid
+            LazyVGrid(columns: columns, spacing: 16) {
+                ForEach(StatusCategory.allCases, id: \.self) { category in
+                    StatusCategoryColumn(
+                        category: category,
+                        statuses: settings.getStatus(for: category),
+                        settings: settings,
+                        style: settings.statusStyle,
+                        onError: { message in
+                            errorMessage = message
+                            showingError = true
+                        }
+                    )
                 }
             }
+            .padding(.vertical)
             
             Spacer()
             
@@ -78,45 +61,145 @@ struct StatusSettingsView: View {
             .keyboardShortcut(.return)
         }
         .padding()
-        .frame(minWidth: 600, minHeight: 400)
-        .sheet(isPresented: $isAddingStatus) {
-            AddCustomStatusView(
-                isPresented: $isAddingStatus,
-                settings: settings,
-                showError: { message in
-                    errorMessage = message
-                    showingError = true
-                }
-            )
-        }
+        .frame(minWidth: 800, minHeight: 600)
         .alert("Error", isPresented: $showingError) {
             Button("OK") { }
         } message: {
             Text(errorMessage)
         }
     }
+}
+
+struct StatusCategoryColumn: View {
+    let category: StatusCategory
+    let statuses: [CustomStatus]
+    let settings: AppSettings
+    let style: StatusStyle
+    let onError: (String) -> Void
     
-    private func handleKeyboardNavigation(_ event: NSEvent) {
-        let styleCount = StatusStyle.allCases.count
-        
-        switch event.keyCode {
-        case 123: // Left arrow
-            if selectedStyleIndex > 0 {
-                selectedStyleIndex -= 1
-                settings.statusStyle = StatusStyle.allCases[selectedStyleIndex]
+    @State private var isAddingStatus = false
+    @State private var draggedStatus: CustomStatus?
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Header
+            Text(category.rawValue)
+                .font(.headline)
+            
+            // Status List
+            ScrollView {
+                LazyVStack(spacing: 8) {
+                    ForEach(statuses) { status in
+                        StatusItemView(
+                            status: status,
+                            style: style,
+                            onDelete: {
+                                settings.removeCustomStatus(id: status.id)
+                            }
+                        )
+                        .onDrag {
+                            self.draggedStatus = status
+                            return NSItemProvider(object: status.id.uuidString as NSString)
+                        }
+                        .onDrop(of: [.text], delegate: DropViewDelegate(
+                            item: status,
+                            draggedItem: $draggedStatus,
+                            items: statuses,
+                            category: category,
+                            settings: settings
+                        ))
+                    }
+                    
+                    // Add Status Button
+                    Button(action: { isAddingStatus = true }) {
+                        HStack {
+                            Image(systemName: "plus.circle.fill")
+                            Text("Add Status")
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                    }
+                    .buttonStyle(.plain)
+                    .background(Color.accentColor.opacity(0.1))
+                    .cornerRadius(6)
+                }
+                .padding()
             }
-        case 124: // Right arrow
-            if selectedStyleIndex < styleCount - 1 {
-                selectedStyleIndex += 1
-                settings.statusStyle = StatusStyle.allCases[selectedStyleIndex]
-            }
-        case 36: // Return
-            dismiss()
-        case 53: // Escape
-            dismiss()
-        default:
-            break
+            .frame(height: 300)
+            .background(Color.black.opacity(0.1))
+            .cornerRadius(8)
         }
+        .frame(maxWidth: .infinity, alignment: .top)
+        .sheet(isPresented: $isAddingStatus) {
+            AddCustomStatusView(
+                isPresented: $isAddingStatus,
+                settings: settings,
+                category: category,
+                showError: onError
+            )
+        }
+    }
+}
+
+struct DropViewDelegate: DropDelegate {
+    let item: CustomStatus
+    @Binding var draggedItem: CustomStatus?
+    let items: [CustomStatus]
+    let category: StatusCategory
+    let settings: AppSettings
+    
+    func performDrop(info: DropInfo) -> Bool {
+        guard let draggedItem = self.draggedItem else { return false }
+        guard draggedItem.category == category else { return false }
+        
+        let fromIndex = items.firstIndex(where: { $0.id == draggedItem.id }) ?? 0
+        let toIndex = items.firstIndex(where: { $0.id == item.id }) ?? 0
+        
+        withAnimation {
+            settings.updateOrder(in: category, oldIndex: fromIndex, newIndex: toIndex)
+        }
+        
+        return true
+    }
+    
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        return DropProposal(operation: .move)
+    }
+}
+
+struct StatusItemView: View {
+    let status: CustomStatus
+    let style: StatusStyle
+    var onDelete: (() -> Void)? = nil
+    var isDragging: Bool = false
+    
+    var body: some View {
+        HStack {
+            style.apply(
+                to: Text(status.rawValue),
+                color: status.color,
+                status: .custom(status.rawValue, colorHex: status.colorHex),
+                fontSize: 12
+            )
+            
+            Spacer()
+            
+            Text(status.name)
+                .foregroundStyle(.secondary)
+                .font(.caption)
+            
+            if !status.isDefault, let onDelete = onDelete {
+                Button(action: onDelete) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.red)
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(8)
+        .background(isDragging ? Color.accentColor.opacity(0.1) : Color.clear)
+        .cornerRadius(6)
     }
 }
 
@@ -130,7 +213,7 @@ struct StatusStylePreview: View {
             style.apply(
                 to: Text("SAMPLE"),
                 color: .blue,
-                status: .todo, // Usando .todo como exemplo
+                status: .todo,
                 fontSize: 11
             )
             
@@ -146,43 +229,10 @@ struct StatusStylePreview: View {
     }
 }
 
-struct CustomStatusView: View {
-    let status: CustomStatus
-    let style: StatusStyle
-    let onDelete: () -> Void
-    
-    var body: some View {
-        VStack(spacing: 4) {
-            ZStack(alignment: .topTrailing) {
-                VStack {
-                    style.apply(
-                        to: Text(status.rawValue),
-                        color: status.color,
-                        status: .todo,
-                        fontSize: 11
-                    )
-                    
-                    Text(status.name)
-                        .font(.caption)
-                }
-                .padding(12)
-                
-                Button(action: onDelete) {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.red)
-                        .font(.system(size: 14))
-                        .background(Color.white.clipShape(Circle()))
-                }
-                .buttonStyle(.plain)
-                
-            }
-        }
-    }
-}
-
 struct AddCustomStatusView: View {
     @Binding var isPresented: Bool
     @ObservedObject var settings: AppSettings
+    let category: StatusCategory
     let showError: (String) -> Void
     
     @State private var name = ""
@@ -193,7 +243,7 @@ struct AddCustomStatusView: View {
     
     var body: some View {
         VStack(spacing: 20) {
-            Text("Add Custom Status")
+            Text("Add \(category.rawValue) Status")
                 .font(.title2)
             
             VStack(alignment: .leading, spacing: 8) {
@@ -243,7 +293,7 @@ struct AddCustomStatusView: View {
                         style.apply(
                             to: Text(rawValue.isEmpty ? "STATUS" : rawValue),
                             color: selectedColor,
-                            status: ItemStatus.custom(rawValue.isEmpty ? "STATUS" : rawValue, colorHex: hex),
+                            status: .custom(rawValue.isEmpty ? "STATUS" : rawValue, colorHex: hex),
                             fontSize: 11
                         )
                     }
@@ -266,7 +316,12 @@ struct AddCustomStatusView: View {
                         return
                     }
                     
-                    if !settings.addCustomStatus(name: name, rawValue: rawValue, colorHex: hex) {
+                    if !settings.addCustomStatus(
+                        name: name,
+                        rawValue: rawValue,
+                        colorHex: hex,
+                        category: category
+                    ) {
                         showError("Status name or code already exists")
                         return
                     }
