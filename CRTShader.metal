@@ -14,7 +14,7 @@ vertex VertexOut vertexShader(uint vertexID [[vertex_id]], constant float2 *vert
 }
 
 fragment float4 fragmentShader(VertexOut in [[stage_in]], texture2d<float> inputTexture [[texture(0)]], sampler inputSampler [[sampler(0)]]) {
-    constexpr float3x3 kernel = float3x3(
+    float3x3 kernel = float3x3(
         0.0, -1.0, 0.0,
         -1.0, 4.0, -1.0,
         0.0, -1.0, 0.0
@@ -34,7 +34,7 @@ fragment float4 fragmentShader(VertexOut in [[stage_in]], texture2d<float> input
     color.rgb -= scanline;
 
     // Noise effect
-    float noise = (rand() % 100) / 100.0 * 0.05;
+    float noise = (arc4random() % 100) / 100.0 * 0.05;
     color.rgb += noise;
 
     // Flicker effect
