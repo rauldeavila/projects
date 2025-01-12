@@ -1,15 +1,11 @@
-//
-//  ContentView.swift
-//  projects
-//
-//  Created by Raul de Avila Junior on 06/01/25.
-//
-
 import SwiftUI
 
 struct ContentView: View {
+    @EnvironmentObject var settings: AppSettings
+    
     var body: some View {
         TaskListView()
+            .modifier(CRTEffectModifier().opacity(settings.crtEffectEnabled ? 1 : 0))
     }
 }
 

@@ -52,6 +52,8 @@ class AppSettings: ObservableObject {
         }
     }
     
+    @Published var crtEffectEnabled: Bool = false // P9707
+    
     /// Todas as cores disponíveis (sistema + personalizadas)
     var availableColors: [(name: String, color: Color)] {
         let system = Self.systemColors
@@ -243,5 +245,9 @@ class AppSettings: ObservableObject {
         
         // Atualiza apenas os status da categoria modificada
         customStatus = customStatus.filter { $0.category != category } + updatedStatus
+    }
+    
+    func toggleCRTEffect() { // P4b5e
+        crtEffectEnabled.toggle()
     }
 }

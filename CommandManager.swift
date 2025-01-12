@@ -6,6 +6,7 @@ class CommandManager: ObservableObject {
     enum Command: String, CaseIterable {
         case color = "/color"
         case status = "/status"
+        case crt = "/toggle-crt" // P4ab0
         
         var description: String {
             switch self {
@@ -13,6 +14,8 @@ class CommandManager: ObservableObject {
                 return "Configure app colors"
             case .status:
                 return "Manage status syles and create new status"
+            case .crt:
+                return "Toggle CRT effect" // P07bb
             }
         }
     }
@@ -57,6 +60,8 @@ class CommandManager: ObservableObject {
             showingColorSettings = true
         case .status:
             showingStatusSettings = true
+        case .crt:
+            AppSettings.shared.toggleCRTEffect() // Pc42c
         }
     }
 }
