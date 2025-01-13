@@ -10,85 +10,103 @@ class AppSettings: ObservableObject {
     
     
     // Status padrão do sistema
-    static let defaultStatuses: [CustomStatus] = [
-        // First Level
-        CustomStatus(
-            id: UUID(),
-            name: "Project",
-            rawValue: "PROJECT",
-            colorHex: "#000000",
-            category: .firstLevel,
-            order: 0,
-            isDefault: true
-        ),
-        
-        // Intermediate Level
-        CustomStatus(
-            id: UUID(),
-            name: "Subproject",
-            rawValue: "SUBPROJECT",
-            colorHex: "#808080",
-            category: .intermediate,
-            order: 0,
-            isDefault: true
-        ),
-        
-        // Task Level - TODO com a cor azul do SwiftUI
-        CustomStatus(
-            id: UUID(),
-            name: "Todo",
-            rawValue: "TODO",
-            colorHex: "#007AFF", // Cor azul do SwiftUI
-            category: .task,
-            order: 0,
-            isDefault: true
-        ),
-        CustomStatus(
-            id: UUID(),
-            name: "Doing",
-            rawValue: "DOING",
-            colorHex: "#FFA500",
-            category: .task,
-            order: 1,
-            isDefault: true
-        ),
-        CustomStatus(
-            id: UUID(),
-            name: "Done",
-            rawValue: "DONE",
-            colorHex: "#00FF00",
-            category: .task,
-            order: 2,
-            isDefault: true
-        ),
-        CustomStatus(
-            id: UUID(),
-            name: "Someday",
-            rawValue: "SOMEDAY",
-            colorHex: "#808080",
-            category: .task,
-            order: 3,
-            isDefault: true
-        ),
-        CustomStatus(
-            id: UUID(),
-            name: "Maybe",
-            rawValue: "MAYBE",
-            colorHex: "#808080",
-            category: .task,
-            order: 4,
-            isDefault: true
-        ),
-        CustomStatus(
-            id: UUID(),
-            name: "Future",
-            rawValue: "FUTURE",
-            colorHex: "#808080",
-            category: .task,
-            order: 5,
-            isDefault: true
-        )
-    ]
+        static let defaultStatuses: [CustomStatus] = [
+            // First Level
+            CustomStatus(
+                id: UUID(),
+                name: "Project",
+                rawValue: "PROJECT",
+                colorHex: "#000000",
+                category: .firstLevel,
+                order: 0,
+                isDefault: true
+            ),
+            
+            // Intermediate Level
+            CustomStatus(
+                id: UUID(),
+                name: "Subproject",
+                rawValue: "SUBPROJECT",
+                colorHex: "#808080",
+                category: .intermediate,
+                order: 0,
+                isDefault: true
+            ),
+            CustomStatus(
+                id: UUID(),
+                name: "Project",
+                rawValue: "PROJECT",
+                colorHex: "#000000",
+                category: .intermediate,
+                order: 1,
+                isDefault: true
+            ),
+            
+            // Task Level - TODO com a cor azul do SwiftUI
+            CustomStatus(
+                id: UUID(),
+                name: "Todo",
+                rawValue: "TODO",
+                colorHex: "#007AFF", // Cor azul do SwiftUI
+                category: .task,
+                order: 0,
+                isDefault: true
+            ),
+            CustomStatus(
+                id: UUID(),
+                name: "Next Actions",
+                rawValue: "NEXT",
+                colorHex: "#9639F5",
+                category: .task,
+                order: 1,
+                isDefault: true
+            ),
+            CustomStatus(
+                id: UUID(),
+                name: "Doing",
+                rawValue: "DOING",
+                colorHex: "#FFA500",
+                category: .task,
+                order: 1,
+                isDefault: true
+            ),
+            CustomStatus(
+                id: UUID(),
+                name: "Done",
+                rawValue: "DONE",
+                colorHex: "#00FF00",
+                category: .task,
+                order: 2,
+                isDefault: true
+            ),
+            CustomStatus(
+                id: UUID(),
+                name: "Bug",
+                rawValue: "BUG",
+                colorHex: "#F50000",
+                category: .task,
+                order: 3,
+                isDefault: true
+            ),
+            CustomStatus(
+                id: UUID(),
+                name: "Read",
+                rawValue: "READ",
+                colorHex: "#F500E9",
+                category: .task,
+                order: 3,
+                isDefault: true
+            ),
+            CustomStatus(
+                id: UUID(),
+                name: "Waiting",
+                rawValue: "WAITING",
+                colorHex: "#F58800",
+                category: .task,
+                order: 3,
+                isDefault: true
+            )
+        ]
     
     init() {
         loadCustomStatus()
@@ -98,6 +116,17 @@ class AppSettings: ObservableObject {
         // Adiciona os status padrão se ainda não existirem
         if customStatus.isEmpty {
             customStatus = Self.defaultStatuses
+        }
+        
+        // Carrega a cor selecionada
+        Task { @MainActor in
+            do {
+                let settings = try await PersistenceManager.shared.loadSettings()
+                selectedColorName = settings.selectedColorName
+                updateAccentColor(selectedColorName)
+            } catch {
+                print("Error loading color selection: \(error)")
+            }
         }
     }
     
@@ -161,10 +190,25 @@ class AppSettings: ObservableObject {
     }
     
     /// Atualiza a cor de accent
+    /// Atualiza a cor de accent
     func updateAccentColor(_ colorName: String) {
         if let colorPair = availableColors.first(where: { $0.name == colorName }) {
             selectedColorName = colorPair.name
             accentColor = colorPair.color
+            
+            // Salva as alterações
+            Task { @MainActor in
+                do {
+                    try await PersistenceManager.shared.saveSettings(
+                        selectedColorName: selectedColorName,
+                        customColors: customColors,
+                        customStatus: customStatus,
+                        statusStyle: statusStyle
+                    )
+                } catch {
+                    print("Error saving color selection: \(error)")
+                }
+            }
         }
     }
     
