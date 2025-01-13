@@ -12,7 +12,7 @@ import SwiftData
 struct ProjectsApp: App {
     init() {
         // Destrói completamente o store antes de iniciar
-//        UserDefaults.standard.removeObject(forKey: "customStatus")
+        UserDefaults.standard.removeObject(forKey: "customStatus")
         PersistenceManager.destroyPersistentStore()
         
         // Inicializa o singleton do AppSettings

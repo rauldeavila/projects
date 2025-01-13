@@ -37,17 +37,22 @@ struct ItemRowView: View {
                     .foregroundColor(.clear)
             }
             
-            // Status indicator
+            // Find the corresponding custom status for additional properties
+            let customStatus = settings.customStatus.first { $0.rawValue == item.status.rawValue }
+            let itemStatus = customStatus != nil
+                ? ItemStatus.custom(item.status.rawValue, colorHex: item.status.colorHex ?? "#000000", customStatus: customStatus)
+                : item.status
+            
             settings.statusStyle.apply(
                 to: Text(item.status.rawValue),
                 color: statusColor,
-                status: item.status,
+                status: itemStatus,
                 fontSize: statusFontSize
             )
             .scaleEffect(statusScale)
             
-            // Task counter
-            if !item.isTask {
+            // Task counter - only show if the status allows it
+            if !item.isTask && (customStatus?.showCounter ?? true) {
                 let counts = item.taskCounts
                 TaskCounterView(
                     completed: counts.completed,
@@ -55,6 +60,7 @@ struct ItemRowView: View {
                     fontSize: statusFontSize
                 )
             }
+
             
             // Title area
             if isEditing {

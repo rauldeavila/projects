@@ -9,100 +9,139 @@ class AppSettings: ObservableObject {
     private let statusStyleKey = "statusStyle"
     
     static let defaultStatuses: [CustomStatus] = [
-        // First Level
-        CustomStatus(
-            id: UUID(),
-            name: "Project",
-            rawValue: "PROJECT",
-            colorHex: "#000000",
-            category: .firstLevel,
-            order: 0,
-            isDefault: true
-        ),
-        
-        // Intermediate Level
-        CustomStatus(
-            id: UUID(),
-            name: "Subproject",
-            rawValue: "SUBPROJECT",
-            colorHex: "#808080",
-            category: .intermediate,
-            order: 0,
-            isDefault: true
-        ),
-        CustomStatus(
-            id: UUID(),
-            name: "Project",
-            rawValue: "PROJECT",
-            colorHex: "#000000",
-            category: .intermediate,
-            order: 1,
-            isDefault: true
-        ),
-        CustomStatus(
-            id: UUID(),
-            name: "Todo",
-            rawValue: "TODO",
-            colorHex: "#007AFF",
-            category: .task,
-            order: 0,
-            isDefault: true
-        ),
-        CustomStatus(
-            id: UUID(),
-            name: "Next Actions",
-            rawValue: "NEXT",
-            colorHex: "#9639F5",
-            category: .task,
-            order: 1,
-            isDefault: true
-        ),
-        CustomStatus(
-            id: UUID(),
-            name: "Doing",
-            rawValue: "DOING",
-            colorHex: "#FFA500",
-            category: .task,
-            order: 1,
-            isDefault: true
-        ),
-        CustomStatus(
-            id: UUID(),
-            name: "Done",
-            rawValue: "DONE",
-            colorHex: "#00FF00",
-            category: .task,
-            order: 2,
-            isDefault: true
-        ),
-        CustomStatus(
-            id: UUID(),
-            name: "Bug",
-            rawValue: "BUG",
-            colorHex: "#F50000",
-            category: .task,
-            order: 3,
-            isDefault: true
-        ),
-        CustomStatus(
-            id: UUID(),
-            name: "Read",
-            rawValue: "READ",
-            colorHex: "#F500E9",
-            category: .task,
-            order: 3,
-            isDefault: true
-        ),
-        CustomStatus(
-            id: UUID(),
-            name: "Waiting",
-            rawValue: "WAITING",
-            colorHex: "#F58800",
-            category: .task,
-            order: 3,
-            isDefault: true
-        )
-    ]
+            CustomStatus(
+                id: UUID(),
+                name: "Project",
+                rawValue: "PROJECT",
+                colorHex: "#FFFFFF",
+                category: .firstLevel,
+                order: 0,
+                isDefault: true,
+                showCounter: true,
+                backgroundColor: "#000000",
+                textColor: "#FFFFFF",
+                forceCustomColors: true
+            ),
+            // Intermediate Level
+            CustomStatus(
+                id: UUID(),
+                name: "Subproject",
+                rawValue: "SUBPROJECT",
+                colorHex: "#808080",
+                category: .intermediate,
+                order: 0,
+                isDefault: true,
+                showCounter: true,
+                backgroundColor: "#000000",
+                textColor: "#808080",
+                forceCustomColors: true
+            ),
+            CustomStatus(
+                id: UUID(),
+                name: "Project",
+                rawValue: "PROJECT",
+                colorHex: "#FFFFFF",
+                category: .intermediate,
+                order: 1,
+                isDefault: true,
+                showCounter: true,
+                backgroundColor: "#000000",
+                textColor: "#FFFFFF",
+                forceCustomColors: true
+            ),
+            // Task Level
+            CustomStatus(
+                id: UUID(),
+                name: "Todo",
+                rawValue: "TODO",
+                colorHex: "#007AFF",
+                category: .task,
+                order: 0,
+                isDefault: true,
+                showCounter: false,
+                backgroundColor: "#E6F3FF",
+                textColor: "#007AFF",
+                forceCustomColors: false
+            ),
+            CustomStatus(
+                id: UUID(),
+                name: "Next Actions",
+                rawValue: "NEXT",
+                colorHex: "#9639F5",
+                category: .task,
+                order: 1,
+                isDefault: true,
+                showCounter: false,
+                backgroundColor: "#F5E6FF",
+                textColor: "#9639F5",
+                forceCustomColors: false
+            ),
+            CustomStatus(
+                id: UUID(),
+                name: "Doing",
+                rawValue: "DOING",
+                colorHex: "#FFA500",
+                category: .task,
+                order: 1,
+                isDefault: true,
+                showCounter: false,
+                backgroundColor: "#FFF3E6",
+                textColor: "#FFA500",
+                forceCustomColors: false
+            ),
+            CustomStatus(
+                id: UUID(),
+                name: "Done",
+                rawValue: "DONE",
+                colorHex: "#00FF00",
+                category: .task,
+                order: 2,
+                isDefault: true,
+                showCounter: false,
+                backgroundColor: "#E6FFE6",
+                textColor: "#008000",
+                forceCustomColors: false
+            ),
+            CustomStatus(
+                id: UUID(),
+                name: "Bug",
+                rawValue: "BUG",
+                colorHex: "#F50000",
+                category: .task,
+                order: 3,
+                isDefault: true,
+                showCounter: false,
+                backgroundColor: "#FFE6E6",
+                textColor: "#F50000",
+                forceCustomColors: false
+            ),
+            CustomStatus(
+                id: UUID(),
+                name: "Read",
+                rawValue: "READ",
+                colorHex: "#F500E9",
+                category: .task,
+                order: 3,
+                isDefault: true,
+                showCounter: false,
+                backgroundColor: "#FFE6FC",
+                textColor: "#F500E9",
+                forceCustomColors: false
+            ),
+            CustomStatus(
+                id: UUID(),
+                name: "Waiting",
+                rawValue: "WAITING",
+                colorHex: "#F58800",
+                category: .task,
+                order: 3,
+                isDefault: true,
+                showCounter: false,
+                backgroundColor: "#FFF0E6",
+                textColor: "#F58800",
+                forceCustomColors: false
+            )
+        ]
     
     init() {
         loadCustomStatus()
@@ -362,30 +401,39 @@ class AppSettings: ObservableObject {
     
     // Adiciona um novo status customizado
     func addCustomStatus(
-        name: String,
-        rawValue: String,
-        colorHex: String,
-        category: StatusCategory
-    ) -> Bool {
-        // Verifica se já existe um status com este nome ou rawValue
-        guard !customStatus.contains(where: { $0.name == name || $0.rawValue == rawValue }) else {
-            return false
+            name: String,
+            rawValue: String,
+            colorHex: String,
+            category: StatusCategory,
+            showCounter: Bool = false,
+            backgroundColor: String = "#000000",
+            textColor: String = "#FFFFFF",
+            forceCustomColors: Bool = false
+        ) -> Bool {
+            // Verifica se já existe um status com este nome ou rawValue
+            guard !customStatus.contains(where: { $0.name == name || $0.rawValue == rawValue }) else {
+                return false
+            }
+            
+            let order = nextAvailableOrder(for: category)
+            let newStatus = CustomStatus(
+                id: UUID(),
+                name: name,
+                rawValue: rawValue,
+                colorHex: colorHex,
+                category: category,
+                order: order,
+                isDefault: false,
+                showCounter: showCounter,
+                backgroundColor: backgroundColor,
+                textColor: textColor,
+                forceCustomColors: forceCustomColors  // Nova propriedade
+            )
+            
+            customStatus.append(newStatus)
+            return true
         }
-        
-        let order = nextAvailableOrder(for: category)
-        let newStatus = CustomStatus(
-            id: UUID(),
-            name: name,
-            rawValue: rawValue,
-            colorHex: colorHex,
-            category: category,
-            order: order,
-            isDefault: false
-        )
-        
-        customStatus.append(newStatus)
-        return true
-    }
+    
     
     // Remove um status customizado
     func removeCustomStatus(id: UUID) {

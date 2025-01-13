@@ -7,7 +7,7 @@ enum StatusCategory: String, Codable, CaseIterable {
     case task = "Task"
 }
 
-struct CustomStatus: Codable, Identifiable {
+struct CustomStatus: Codable, Identifiable, Equatable, Hashable {
     let id: UUID
     var name: String
     var rawValue: String
@@ -15,52 +15,29 @@ struct CustomStatus: Codable, Identifiable {
     var category: StatusCategory
     var order: Int
     var isDefault: Bool
+    var showCounter: Bool
+    var backgroundColor: String
+    var textColor: String
+    var forceCustomColors: Bool // Nova propriedade
     
     var color: Color {
         Color(hex: colorHex) ?? .gray
     }
     
-    // Status padrão do sistema
-    static let project = CustomStatus(
-        id: UUID(),
-        name: "Project",
-        rawValue: "PROJECT",
-        colorHex: "#000000",
-        category: .firstLevel,
-        order: 0,
-        isDefault: true
-    )
+    var bgColor: Color {
+        Color(hex: backgroundColor) ?? .black
+    }
     
-    static let subproject = CustomStatus(
-        id: UUID(),
-        name: "Subproject",
-        rawValue: "SUBPROJECT",
-        colorHex: "#808080",
-        category: .intermediate,
-        order: 0,
-        isDefault: true
-    )
+    var txtColor: Color {
+        Color(hex: textColor) ?? .white
+    }
     
-    static let todo = CustomStatus(
-        id: UUID(),
-        name: "Todo",
-        rawValue: "TODO",
-        colorHex: "#0000FF",
-        category: .task,
-        order: 0,
-        isDefault: true
-    )
+    static func == (lhs: CustomStatus, rhs: CustomStatus) -> Bool {
+        lhs.id == rhs.id
+    }
     
-    // Status padrão por categoria
-    static func defaultStatus(for category: StatusCategory) -> CustomStatus {
-        switch category {
-        case .firstLevel:
-            return project
-        case .intermediate:
-            return subproject
-        case .task:
-            return todo
-        }
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
     }
 }
 
@@ -69,6 +46,7 @@ enum StatusStyle: String, Codable, CaseIterable {
     case neutral = "Neutral"
     case black = "Black"
     case white = "White"
+    case custom = "Custom Colors"
     
     func apply(to text: Text, color: Color, status: ItemStatus, fontSize: Double) -> some View {
         let baseText = text
@@ -76,40 +54,51 @@ enum StatusStyle: String, Codable, CaseIterable {
             .padding(.horizontal, 4)
             .padding(.vertical, 2)
         
-        // Special handling for project statuses
-        if status.rawValue == "PROJECT" {
+        // Se tem customStatus e forceCustomColors está ativo, ignora o estilo global
+        if let customStatus = status.customStatus, customStatus.forceCustomColors {
             return AnyView(baseText
-                .foregroundStyle(.white)
-                .background(.black)
-                .cornerRadius(4))
-        } else if status.rawValue == "SUBPROJECT" {
-            return AnyView(baseText
-                .foregroundStyle(.gray)
-                .background(.black)
+                .foregroundStyle(customStatus.txtColor)
+                .background(customStatus.bgColor)
                 .cornerRadius(4))
         }
         
-        // Regular status styling
+        // Caso contrário, segue o estilo normal
         switch self {
         case .system:
             return AnyView(baseText
                 .foregroundStyle(color.opacity(1))
                 .background(color.opacity(0.2))
                 .cornerRadius(4))
+                
         case .neutral:
             return AnyView(baseText
                 .background(color.opacity(0.2))
                 .cornerRadius(4))
+                
         case .black:
             return AnyView(baseText
                 .foregroundStyle(color.opacity(1))
                 .background(.black)
                 .cornerRadius(4))
+                
         case .white:
             return AnyView(baseText
                 .foregroundStyle(color.opacity(1))
                 .background(.white)
                 .cornerRadius(4))
+                
+        case .custom:
+            if let customStatus = status.customStatus {
+                return AnyView(baseText
+                    .foregroundStyle(customStatus.txtColor)
+                    .background(customStatus.bgColor)
+                    .cornerRadius(4))
+            } else {
+                return AnyView(baseText
+                    .foregroundStyle(color)
+                    .background(Color.black)
+                    .cornerRadius(4))
+            }
         }
     }
 }

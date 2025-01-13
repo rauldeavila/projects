@@ -203,7 +203,7 @@ struct StatusItemView: View {
     
     var body: some View {
         HStack {
-            let itemStatus = ItemStatus.custom(status.rawValue, colorHex: status.colorHex)
+            let itemStatus = ItemStatus.custom(status.rawValue, colorHex: status.colorHex, customStatus: status)
             
             style.apply(
                 to: Text(status.rawValue),
@@ -213,6 +213,13 @@ struct StatusItemView: View {
             )
             
             Spacer()
+            
+            // Show counter indicator for non-task status if enabled
+            if status.category != .task {
+                Image(systemName: status.showCounter ? "number.square.fill" : "number.square")
+                    .foregroundStyle(.secondary)
+                    .font(.system(size: 12))
+            }
             
             Text(status.name)
                 .foregroundStyle(.secondary)
@@ -233,7 +240,6 @@ struct StatusItemView: View {
     }
 }
 
-
 struct AddCustomStatusView: View {
     @Binding var isPresented: Bool
     @ObservedObject var settings: AppSettings
@@ -243,8 +249,14 @@ struct AddCustomStatusView: View {
     @State private var name = ""
     @State private var rawValue = ""
     @State private var selectedColor = Color.blue
+    @State private var selectedBgColor = Color.black
+    @State private var selectedTextColor = Color.white
     @State private var hex = "#0000FF"
+    @State private var bgHex = "#000000"
+    @State private var textHex = "#FFFFFF"
     @State private var isEditingHex = false
+    @State private var showCounter = false
+    @State private var forceCustomColors = false
     
     var body: some View {
         VStack(spacing: 20) {
@@ -269,36 +281,104 @@ struct AddCustomStatusView: View {
             }
             
             VStack(alignment: .leading, spacing: 8) {
-                Text("Color")
+                Text("Colors")
                     .font(.headline)
                 
-                ColorPicker("Select Color", selection: $selectedColor)
-                    .labelsHidden()
-                    .onChange(of: selectedColor) { newColor in
-                        if let hexString = newColor.toHex() {
-                            isEditingHex = true
-                            hex = hexString
-                        }
-                    }
-                
-                TextField("#000000", text: $hex)
-                    .textFieldStyle(.roundedBorder)
-                    .onChange(of: hex) { newValue in
-                        if !isEditingHex {
-                            if let color = Color(hex: newValue) {
-                                selectedColor = color
+                // Main Color Picker
+                HStack {
+                    Text("Main Color:")
+                    ColorPicker("", selection: $selectedColor)
+                        .labelsHidden()
+                        .onChange(of: selectedColor) { newColor in
+                            if let hexString = newColor.toHex() {
+                                isEditingHex = true
+                                hex = hexString
                             }
                         }
-                        isEditingHex = false
+                    TextField("", text: $hex)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 100)
+                }
+                
+                // Background Color Picker
+                HStack {
+                    Text("Background:")
+                    ColorPicker("", selection: $selectedBgColor)
+                        .labelsHidden()
+                        .onChange(of: selectedBgColor) { newColor in
+                            if let hexString = newColor.toHex() {
+                                bgHex = hexString
+                            }
+                        }
+                    TextField("", text: $bgHex)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 100)
+                }
+                
+                // Text Color Picker
+                HStack {
+                    Text("Text Color:")
+                    ColorPicker("", selection: $selectedTextColor)
+                        .labelsHidden()
+                        .onChange(of: selectedTextColor) { newColor in
+                            if let hexString = newColor.toHex() {
+                                textHex = hexString
+                            }
+                        }
+                    TextField("", text: $textHex)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 100)
+                }
+                
+                // Show counter toggle for non-task categories
+                if category != .task {
+                    Toggle("Show Task Counter", isOn: $showCounter)
+                        .padding(.top, 8)
+                }
+                
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Style Options")
+                        .font(.headline)
+                    
+                    Toggle("Force Custom Colors", isOn: $forceCustomColors)
+                        .help("Always use custom colors for this status, ignoring global style")
+                    
+                    if category != .task {
+                        Toggle("Show Task Counter", isOn: $showCounter)
                     }
+                }
                 
                 // Preview
+                Text("Preview:")
+                    .font(.headline)
+                    .padding(.top, 8)
+                
                 HStack {
                     ForEach(StatusStyle.allCases, id: \.self) { style in
+                        let previewStatus = CustomStatus(
+                            id: UUID(),
+                            name: name,
+                            rawValue: rawValue.isEmpty ? "STATUS" : rawValue,
+                            colorHex: hex,
+                            category: category,
+                            order: 0,
+                            isDefault: false,
+                            showCounter: showCounter,
+                            backgroundColor: bgHex,
+                            textColor: textHex,
+                            forceCustomColors: false
+                        )
+                        
+                        let previewItemStatus = ItemStatus.custom(
+                            rawValue.isEmpty ? "STATUS" : rawValue,
+                            colorHex: hex,
+                            customStatus: previewStatus
+                        )
+                        
                         style.apply(
                             to: Text(rawValue.isEmpty ? "STATUS" : rawValue),
                             color: selectedColor,
-                            status: .custom(rawValue.isEmpty ? "STATUS" : rawValue, colorHex: hex),
+                            status: previewItemStatus,
                             fontSize: 11
                         )
                     }
@@ -325,7 +405,11 @@ struct AddCustomStatusView: View {
                         name: name,
                         rawValue: rawValue,
                         colorHex: hex,
-                        category: category
+                        category: category,
+                        showCounter: showCounter,
+                        backgroundColor: bgHex,
+                        textColor: textHex,
+                        forceCustomColors: forceCustomColors  // Nova propriedade
                     ) {
                         showError("Status name or code already exists")
                         return
@@ -335,9 +419,8 @@ struct AddCustomStatusView: View {
                 }
                 .keyboardShortcut(.return)
             }
-            .padding(.top)
+            .padding()
+            .frame(width: 400)
         }
-        .padding()
-        .frame(width: 400)
     }
 }

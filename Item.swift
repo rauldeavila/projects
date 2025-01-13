@@ -5,9 +5,10 @@ struct ItemStatus: Codable, Hashable {
     let rawValue: String
     let isCustom: Bool
     let colorHex: String?
+    let customStatus: CustomStatus?
     
-    static func custom(_ value: String, colorHex: String) -> ItemStatus {
-        ItemStatus(rawValue: value, isCustom: true, colorHex: colorHex)
+    static func custom(_ value: String, colorHex: String, customStatus: CustomStatus? = nil) -> ItemStatus {
+        ItemStatus(rawValue: value, isCustom: true, colorHex: colorHex, customStatus: customStatus)
     }
     
     var isDone: Bool {
@@ -19,6 +20,22 @@ struct ItemStatus: Codable, Hashable {
             return Color(hex: hex) ?? .gray
         }
         return .gray
+    }
+    
+    // Implementação do Equatable
+    static func == (lhs: ItemStatus, rhs: ItemStatus) -> Bool {
+        lhs.rawValue == rhs.rawValue &&
+        lhs.isCustom == rhs.isCustom &&
+        lhs.colorHex == rhs.colorHex &&
+        lhs.customStatus?.id == rhs.customStatus?.id // Comparamos apenas o ID do CustomStatus
+    }
+    
+    // Implementação do Hashable
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(rawValue)
+        hasher.combine(isCustom)
+        hasher.combine(colorHex)
+        hasher.combine(customStatus?.id) // Incluímos apenas o ID do CustomStatus no hash
     }
 }
 

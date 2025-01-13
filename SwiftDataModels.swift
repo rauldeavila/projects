@@ -31,6 +31,10 @@ final class CustomStatusModel {
     var category: String
     var order: Int
     var isDefault: Bool
+    var showCounter: Bool
+    var backgroundColor: String
+    var textColor: String
+    var forceCustomColors: Bool
     
     init(
         id: UUID = UUID(),
@@ -39,7 +43,11 @@ final class CustomStatusModel {
         colorHex: String,
         category: String,
         order: Int,
-        isDefault: Bool
+        isDefault: Bool,
+        showCounter: Bool = false,
+        backgroundColor: String = "#000000",
+        textColor: String = "#FFFFFF",
+        forceCustomColors: Bool = false
     ) {
         self.id = id
         self.name = name
@@ -48,6 +56,10 @@ final class CustomStatusModel {
         self.category = category
         self.order = order
         self.isDefault = isDefault
+        self.showCounter = showCounter
+        self.backgroundColor = backgroundColor
+        self.textColor = textColor
+        self.forceCustomColors = forceCustomColors
     }
     
     var toDomain: CustomStatus {
@@ -58,7 +70,11 @@ final class CustomStatusModel {
             colorHex: colorHex,
             category: StatusCategory(rawValue: category) ?? .task,
             order: order,
-            isDefault: isDefault
+            isDefault: isDefault,
+            showCounter: showCounter,
+            backgroundColor: backgroundColor,
+            textColor: textColor,
+            forceCustomColors: forceCustomColors  // Usa o valor salvo
         )
     }
     
@@ -70,10 +86,15 @@ final class CustomStatusModel {
             colorHex: status.colorHex,
             category: status.category.rawValue,
             order: status.order,
-            isDefault: status.isDefault
+            isDefault: status.isDefault,
+            showCounter: status.showCounter,
+            backgroundColor: status.backgroundColor,
+            textColor: status.textColor,
+            forceCustomColors: status.forceCustomColors
         )
     }
 }
+
 
 @Model
 final class AppData {
