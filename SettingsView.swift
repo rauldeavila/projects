@@ -41,92 +41,191 @@ struct SettingsView: View {
     @Environment(\.dismiss) var dismiss
     @State private var selectedColorIndex = 0
     @State private var isAddingColor = false
-    @State private var newColorName = ""
-    @State private var newColorHex = ""
     @State private var showingError = false
     @State private var errorMessage = ""
     
+    @State private var selectedBackgroundColor: Color
+    @State private var selectedTextColor: Color
+    @State private var selectedInputBarBackgroundColor: Color
+    @State private var selectedInputBarTextColor: Color
+    @State private var selectedInputBarBorderColor: Color
+    @State private var inputBarBorderWidth: Double
+    @State private var inputBarCornerRadius: Double
+    @State private var inputBarShowBorder: Bool
+    
+    init(settings: AppSettings) {
+        self.settings = settings
+        _selectedBackgroundColor = State(initialValue: settings.backgroundColor)
+        _selectedTextColor = State(initialValue: settings.textColor)
+        _selectedInputBarBackgroundColor = State(initialValue: settings.inputBarBackgroundColor)
+        _selectedInputBarTextColor = State(initialValue: settings.inputBarTextColor)
+        _selectedInputBarBorderColor = State(initialValue: settings.inputBarBorderColor)
+        _inputBarBorderWidth = State(initialValue: settings.inputBarBorderWidth)
+        _inputBarCornerRadius = State(initialValue: settings.inputBarCornerRadius)
+        _inputBarShowBorder = State(initialValue: settings.inputBarShowBorder)
+    }
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Settings")
-                .font(.title)
-                .padding(.bottom)
-            
+        VStack(spacing: 0) {
+            // Header
             HStack {
-                Text("Accent Color")
-                    .font(.headline)
-                
+                Text("Color Settings")
+                    .font(.title)
+                    .fontWeight(.bold)
                 Spacer()
-                
-                Button("Add Color") {
-                    isAddingColor = true
+                Button("Done") {
+                    dismiss()
                 }
-                .buttonStyle(.plain)
-                .foregroundColor(.accentColor)
+                .keyboardShortcut(.return)
             }
+            .padding()
             
-            // Add opacity slider section
-            VStack(alignment: .leading, spacing: 8) {
-                
-                HStack {
-                    Spacer()
-                    
-                    Text("Selection Opacity Amount")
-                        .font(.headline)
-                    
-                    Slider(value: $settings.accentOpacity, in: 0.1...1.0)
-                        .frame(maxWidth: 200)
-                    
-                    Text(String(format: "%.1f", settings.accentOpacity))
-                        .monospacedDigit()
-                        .foregroundColor(.secondary)
-                    
-                    Spacer()
-                }
-                
-                // Preview of opacity
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(settings.accentColor.opacity(settings.accentOpacity))
-                    .frame(height: 40)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                    )
-            }
-            .padding(.bottom, 8)
-            
-            LazyVGrid(columns: [
-                GridItem(.adaptive(minimum: 100, maximum: 120), spacing: 12)
-            ], spacing: 12) {
-                ForEach(Array(settings.availableColors.enumerated()), id: \.element.name) { index, colorOption in
-                    ColorOptionView(
-                        name: colorOption.name,
-                        color: colorOption.color,
-                        isSelected: settings.selectedColorName == colorOption.name,
-                        hasFocus: selectedColorIndex == index,
-                        isSystem: index < AppSettings.systemColors.count,
-                        onDelete: {
-                            if let customColor = settings.customColors.first(where: { $0.name == colorOption.name }) {
-                                settings.removeCustomColor(id: customColor.id)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 32) {
+                    // Accent Color Section
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack {
+                            Text("Accent Color")
+                                .font(.headline)
+                            
+                            Spacer()
+                            
+                            Button("Add Color") {
+                                isAddingColor = true
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundColor(.accentColor)
+                        }
+                        
+                        // Color Grid
+                        LazyVGrid(columns: [
+                            GridItem(.adaptive(minimum: 100, maximum: 120), spacing: 12)
+                        ], spacing: 12) {
+                            ForEach(Array(settings.availableColors.enumerated()), id: \.element.name) { index, colorOption in
+                                ColorOptionView(
+                                    name: colorOption.name,
+                                    color: colorOption.color,
+                                    isSelected: settings.selectedColorName == colorOption.name,
+                                    hasFocus: selectedColorIndex == index,
+                                    isSystem: index < AppSettings.systemColors.count,
+                                    onDelete: {
+                                        if let customColor = settings.customColors.first(where: { $0.name == colorOption.name }) {
+                                            settings.removeCustomColor(id: customColor.id)
+                                        }
+                                    }
+                                )
+                                .onTapGesture {
+                                    selectedColorIndex = index
+                                    settings.updateAccentColor(colorOption.name)
+                                }
                             }
                         }
-                    )
-                    .onTapGesture {
-                        selectedColorIndex = index
-                        settings.updateAccentColor(colorOption.name)
+                        
+                        // Opacity Control
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Selection Opacity")
+                                .font(.headline)
+                            
+                            HStack {
+                                Slider(value: $settings.accentOpacity, in: 0.1...1.0)
+                                Text(String(format: "%.1f", settings.accentOpacity))
+                                    .monospacedDigit()
+                                    .foregroundColor(.secondary)
+                                    .frame(width: 40)
+                            }
+                            
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(settings.accentColor.opacity(settings.accentOpacity))
+                                .frame(height: 40)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                )
+                        }
+                        .padding(.top, 8)
+                    }
+                    
+                    Divider()
+                    
+                    // App Colors Section
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("App Colors")
+                            .font(.headline)
+                        
+                        VStack(spacing: 12) {
+                            ColorPickerRow(label: "Background", selection: $selectedBackgroundColor) { newColor in
+                                settings.updateBackgroundColor(newColor)
+                            }
+                            
+                            ColorPickerRow(label: "Text", selection: $selectedTextColor) { newColor in
+                                settings.updateTextColor(newColor)
+                            }
+                        }
+                    }
+                    
+                    Divider()
+                    
+                    // Input Bar Section
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Input Bar")
+                            .font(.headline)
+                        
+                        VStack(spacing: 12) {
+                            ColorPickerRow(label: "Background", selection: $selectedInputBarBackgroundColor) { newColor in
+                                settings.updateInputBarBackgroundColor(newColor)
+                            }
+                            
+                            ColorPickerRow(label: "Text", selection: $selectedInputBarTextColor) { newColor in
+                                settings.updateInputBarTextColor(newColor)
+                            }
+                            
+                            Toggle("Show Border", isOn: $inputBarShowBorder)
+                                .onChange(of: inputBarShowBorder) { newValue in
+                                    settings.updateInputBarShowBorder(newValue)
+                                }
+                            
+                            if inputBarShowBorder {
+                                ColorPickerRow(label: "Border", selection: $selectedInputBarBorderColor) { newColor in
+                                    settings.updateInputBarBorderColor(newColor)
+                                }
+                                
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Border Width")
+                                    HStack {
+                                        Slider(value: $inputBarBorderWidth, in: 0.5...5.0, step: 0.5)
+                                            .frame(width: 200)
+                                        Text(String(format: "%.1f", inputBarBorderWidth))
+                                            .monospacedDigit()
+                                            .foregroundColor(.secondary)
+                                            .frame(width: 40)
+                                    }
+                                }
+                                .onChange(of: inputBarBorderWidth) { newValue in
+                                    settings.updateInputBarBorderWidth(newValue)
+                                }
+                                
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Corner Radius")
+                                    HStack {
+                                        Slider(value: $inputBarCornerRadius, in: 0...20.0, step: 1.0)
+                                            .frame(width: 200)
+                                        Text(String(format: "%.0f", inputBarCornerRadius))
+                                            .monospacedDigit()
+                                            .foregroundColor(.secondary)
+                                            .frame(width: 40)
+                                    }
+                                }
+                                .onChange(of: inputBarCornerRadius) { newValue in
+                                    settings.updateInputBarCornerRadius(newValue)
+                                }
+                            }
+                        }
                     }
                 }
+                .padding(24)
             }
-            
-            Spacer()
-            
-            Button("Done") {
-                dismiss()
-            }
-            .keyboardShortcut(.return)
         }
-        .padding()
-        .frame(minWidth: 500, minHeight: 400)
+        .frame(width: 600, height: 700)
         .sheet(isPresented: $isAddingColor) {
             AddCustomColorView(
                 isPresented: $isAddingColor,
@@ -186,8 +285,6 @@ struct SettingsView: View {
                 selectedColorIndex = (currentRow - 1) * colorsPerRow + currentCol
                 updateSelectedColor()
             }
-        case 36: // Return
-            dismiss()
         default:
             break
         }
@@ -196,6 +293,22 @@ struct SettingsView: View {
     private func updateSelectedColor() {
         let colorOption = settings.availableColors[selectedColorIndex]
         settings.updateAccentColor(colorOption.name)
+    }
+}
+
+struct ColorPickerRow: View {
+    let label: String
+    @Binding var selection: Color
+    let onChange: (Color) -> Void
+    
+    var body: some View {
+        HStack {
+            Text(label)
+                .frame(width: 100, alignment: .leading)
+            Spacer()
+            ColorPicker("", selection: $selection)
+                .onChange(of: selection, perform: onChange)
+        }
     }
 }
 

@@ -28,6 +28,10 @@ struct TaskListView: View {
     var body: some View {
         ScrollViewReader { proxy in
             ZStack(alignment: .bottom) {
+                
+                settings.backgroundColor
+                    .ignoresSafeArea()
+                
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(viewModel.buildFlattenedList(items: viewModel.items), id: \.item.id) { itemInfo in
@@ -134,14 +138,26 @@ struct TaskListView: View {
                         } // group
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.bottom, 40)
+                    .padding(.bottom, 0)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 
                 if viewModel.editingItemId == nil {
                     HStack {
                         TextField("New item...", text: $viewModel.newItemText)
-                            .padding(6)
+                            // Primeiro aplicamos o padding interno do texto
+                            .padding(.horizontal, 12)  // Padding interno do texto
+                            .padding(.vertical, 8)     // Padding interno do texto
+                            // Depois aplicamos os estilos visuais
+                            .background(settings.inputBarBackgroundColor)
+                            .foregroundColor(settings.inputBarTextColor)
+                            .if(settings.inputBarShowBorder) { view in
+                                view.overlay(
+                                    RoundedRectangle(cornerRadius: settings.inputBarCornerRadius)
+                                        .stroke(settings.inputBarBorderColor, lineWidth: settings.inputBarBorderWidth)
+                                )
+                            }
+                            .cornerRadius(settings.inputBarCornerRadius)
                             .textFieldStyle(.plain)
                             .font(.system(size: baseNewItemSize * zoomLevel))
                             .focused($isNewItemFieldFocused)
@@ -198,7 +214,7 @@ struct TaskListView: View {
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(.black)
+//                    .background(settings.backgroundColor)
                 }
             }
             .background(Color(.textBackgroundColor))

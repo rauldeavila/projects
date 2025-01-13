@@ -107,6 +107,7 @@ struct ItemRowView: View {
             } else {
                 Text(item.title)
                     .font(.system(size: fontSize))
+                    .foregroundColor(settings.textColor)
             }
         }
         .padding(.leading, CGFloat(level) * 20)

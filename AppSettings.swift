@@ -8,105 +8,101 @@ class AppSettings: ObservableObject {
     private let customStatusKey = "customStatus"
     private let statusStyleKey = "statusStyle"
     
-    
-    // Status padrão do sistema
-        static let defaultStatuses: [CustomStatus] = [
-            // First Level
-            CustomStatus(
-                id: UUID(),
-                name: "Project",
-                rawValue: "PROJECT",
-                colorHex: "#000000",
-                category: .firstLevel,
-                order: 0,
-                isDefault: true
-            ),
-            
-            // Intermediate Level
-            CustomStatus(
-                id: UUID(),
-                name: "Subproject",
-                rawValue: "SUBPROJECT",
-                colorHex: "#808080",
-                category: .intermediate,
-                order: 0,
-                isDefault: true
-            ),
-            CustomStatus(
-                id: UUID(),
-                name: "Project",
-                rawValue: "PROJECT",
-                colorHex: "#000000",
-                category: .intermediate,
-                order: 1,
-                isDefault: true
-            ),
-            
-            // Task Level - TODO com a cor azul do SwiftUI
-            CustomStatus(
-                id: UUID(),
-                name: "Todo",
-                rawValue: "TODO",
-                colorHex: "#007AFF", // Cor azul do SwiftUI
-                category: .task,
-                order: 0,
-                isDefault: true
-            ),
-            CustomStatus(
-                id: UUID(),
-                name: "Next Actions",
-                rawValue: "NEXT",
-                colorHex: "#9639F5",
-                category: .task,
-                order: 1,
-                isDefault: true
-            ),
-            CustomStatus(
-                id: UUID(),
-                name: "Doing",
-                rawValue: "DOING",
-                colorHex: "#FFA500",
-                category: .task,
-                order: 1,
-                isDefault: true
-            ),
-            CustomStatus(
-                id: UUID(),
-                name: "Done",
-                rawValue: "DONE",
-                colorHex: "#00FF00",
-                category: .task,
-                order: 2,
-                isDefault: true
-            ),
-            CustomStatus(
-                id: UUID(),
-                name: "Bug",
-                rawValue: "BUG",
-                colorHex: "#F50000",
-                category: .task,
-                order: 3,
-                isDefault: true
-            ),
-            CustomStatus(
-                id: UUID(),
-                name: "Read",
-                rawValue: "READ",
-                colorHex: "#F500E9",
-                category: .task,
-                order: 3,
-                isDefault: true
-            ),
-            CustomStatus(
-                id: UUID(),
-                name: "Waiting",
-                rawValue: "WAITING",
-                colorHex: "#F58800",
-                category: .task,
-                order: 3,
-                isDefault: true
-            )
-        ]
+    static let defaultStatuses: [CustomStatus] = [
+        // First Level
+        CustomStatus(
+            id: UUID(),
+            name: "Project",
+            rawValue: "PROJECT",
+            colorHex: "#000000",
+            category: .firstLevel,
+            order: 0,
+            isDefault: true
+        ),
+        
+        // Intermediate Level
+        CustomStatus(
+            id: UUID(),
+            name: "Subproject",
+            rawValue: "SUBPROJECT",
+            colorHex: "#808080",
+            category: .intermediate,
+            order: 0,
+            isDefault: true
+        ),
+        CustomStatus(
+            id: UUID(),
+            name: "Project",
+            rawValue: "PROJECT",
+            colorHex: "#000000",
+            category: .intermediate,
+            order: 1,
+            isDefault: true
+        ),
+        CustomStatus(
+            id: UUID(),
+            name: "Todo",
+            rawValue: "TODO",
+            colorHex: "#007AFF",
+            category: .task,
+            order: 0,
+            isDefault: true
+        ),
+        CustomStatus(
+            id: UUID(),
+            name: "Next Actions",
+            rawValue: "NEXT",
+            colorHex: "#9639F5",
+            category: .task,
+            order: 1,
+            isDefault: true
+        ),
+        CustomStatus(
+            id: UUID(),
+            name: "Doing",
+            rawValue: "DOING",
+            colorHex: "#FFA500",
+            category: .task,
+            order: 1,
+            isDefault: true
+        ),
+        CustomStatus(
+            id: UUID(),
+            name: "Done",
+            rawValue: "DONE",
+            colorHex: "#00FF00",
+            category: .task,
+            order: 2,
+            isDefault: true
+        ),
+        CustomStatus(
+            id: UUID(),
+            name: "Bug",
+            rawValue: "BUG",
+            colorHex: "#F50000",
+            category: .task,
+            order: 3,
+            isDefault: true
+        ),
+        CustomStatus(
+            id: UUID(),
+            name: "Read",
+            rawValue: "READ",
+            colorHex: "#F500E9",
+            category: .task,
+            order: 3,
+            isDefault: true
+        ),
+        CustomStatus(
+            id: UUID(),
+            name: "Waiting",
+            rawValue: "WAITING",
+            colorHex: "#F58800",
+            category: .task,
+            order: 3,
+            isDefault: true
+        )
+    ]
     
     init() {
         loadCustomStatus()
@@ -133,6 +129,54 @@ class AppSettings: ObservableObject {
                 print("Error loading color selection: \(error)")
             }
         }
+        
+        // Carrega cores salvas ou usa valores padrão
+        if let data = UserDefaults.standard.data(forKey: backgroundColorKey),
+           let color = try? JSONDecoder().decode(CustomColor.self, from: data) {
+            backgroundColor = color.color
+        } else {
+            backgroundColor = .black
+        }
+
+        if let data = UserDefaults.standard.data(forKey: textColorKey),
+           let color = try? JSONDecoder().decode(CustomColor.self, from: data) {
+            textColor = color.color
+        } else {
+            textColor = .white
+        }
+
+        if let data = UserDefaults.standard.data(forKey: inputBarBackgroundColorKey),
+           let color = try? JSONDecoder().decode(CustomColor.self, from: data) {
+            inputBarBackgroundColor = color.color
+        } else {
+            inputBarBackgroundColor = .black
+        }
+
+        if let data = UserDefaults.standard.data(forKey: inputBarTextColorKey),
+           let color = try? JSONDecoder().decode(CustomColor.self, from: data) {
+            inputBarTextColor = color.color
+        } else {
+            inputBarTextColor = .white
+        }
+
+        if let data = UserDefaults.standard.data(forKey: inputBarBorderColorKey),
+           let color = try? JSONDecoder().decode(CustomColor.self, from: data) {
+            inputBarBorderColor = color.color
+        } else {
+            inputBarBorderColor = .gray
+        }
+
+        inputBarBorderWidth = UserDefaults.standard.double(forKey: inputBarBorderWidthKey)
+        if inputBarBorderWidth == 0 {
+            inputBarBorderWidth = 1.0
+        }
+
+        inputBarCornerRadius = UserDefaults.standard.double(forKey: inputBarCornerRadiusKey)
+        if inputBarCornerRadius == 0 {
+            inputBarCornerRadius = 4.0
+        }
+
+        inputBarShowBorder = UserDefaults.standard.bool(forKey: inputBarShowBorderKey)
     }
     
     // Métodos auxiliares para acessar status por categoria
@@ -186,6 +230,24 @@ class AppSettings: ObservableObject {
             UserDefaults.standard.set(try? JSONEncoder().encode(statusStyle), forKey: statusStyleKey)
         }
     }
+    
+    @Published var backgroundColor: Color = .black
+    @Published var textColor: Color = .white
+    @Published var inputBarBackgroundColor: Color = .black
+    @Published var inputBarTextColor: Color = .white
+    @Published var inputBarBorderColor: Color = .gray
+    @Published var inputBarBorderWidth: Double = 1.0
+    @Published var inputBarCornerRadius: Double = 4.0
+    @Published var inputBarShowBorder: Bool = false
+    
+    private let backgroundColorKey = "backgroundColor"
+    private let textColorKey = "textColor"
+    private let inputBarBackgroundColorKey = "inputBarBackgroundColor"
+    private let inputBarTextColorKey = "inputBarTextColor"
+    private let inputBarBorderColorKey = "inputBarBorderColor"
+    private let inputBarBorderWidthKey = "inputBarBorderWidth"
+    private let inputBarCornerRadiusKey = "inputBarCornerRadius"
+    private let inputBarShowBorderKey = "inputBarShowBorder"
     
     /// Todas as cores disponíveis (sistema + personalizadas)
     var availableColors: [(name: String, color: Color)] {
@@ -289,16 +351,6 @@ class AppSettings: ObservableObject {
             statusStyle = style
         }
     }
-
-//    // Métodos auxiliares para acessar status por categoria
-//    func getStatus(for category: StatusCategory) -> [CustomStatus] {
-//        let defaultStatus = CustomStatus.defaultStatus(for: category)
-//        let categoryStatus = customStatus
-//            .filter { $0.category == category }
-//            .sorted { $0.order < $1.order }
-//        
-//        return [defaultStatus] + categoryStatus
-//    }
     
     func nextAvailableOrder(for category: StatusCategory) -> Int {
         let maxOrder = customStatus
@@ -381,5 +433,55 @@ class AppSettings: ObservableObject {
         
         // Atualiza apenas os status da categoria modificada
         customStatus = customStatus.filter { $0.category != category } + updatedStatus
+    }
+    
+    // Adicione estas funções para salvar as cores:
+    private func saveColor(_ color: Color, forKey key: String) {
+        if let hex = color.toHex() {
+            let customColor = CustomColor(id: UUID(), name: "Saved Color", hex: hex)
+            if let data = try? JSONEncoder().encode(customColor) {
+                UserDefaults.standard.set(data, forKey: key)
+            }
+        }
+    }
+    
+    func updateBackgroundColor(_ color: Color) {
+        backgroundColor = color
+        saveColor(color, forKey: backgroundColorKey)
+    }
+
+    func updateTextColor(_ color: Color) {
+        textColor = color
+        saveColor(color, forKey: textColorKey)
+    }
+
+    func updateInputBarBackgroundColor(_ color: Color) {
+        inputBarBackgroundColor = color
+        saveColor(color, forKey: inputBarBackgroundColorKey)
+    }
+
+    func updateInputBarTextColor(_ color: Color) {
+        inputBarTextColor = color
+        saveColor(color, forKey: inputBarTextColorKey)
+    }
+
+    func updateInputBarBorderColor(_ color: Color) {
+        inputBarBorderColor = color
+        saveColor(color, forKey: inputBarBorderColorKey)
+    }
+
+    func updateInputBarBorderWidth(_ width: Double) {
+        inputBarBorderWidth = width
+        UserDefaults.standard.set(width, forKey: inputBarBorderWidthKey)
+    }
+
+    func updateInputBarCornerRadius(_ radius: Double) {
+        inputBarCornerRadius = radius
+        UserDefaults.standard.set(radius, forKey: inputBarCornerRadiusKey)
+    }
+
+    func updateInputBarShowBorder(_ show: Bool) {
+        inputBarShowBorder = show
+        UserDefaults.standard.set(show, forKey: inputBarShowBorderKey)
     }
 }
