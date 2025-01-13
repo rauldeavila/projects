@@ -107,32 +107,38 @@ struct Item: Identifiable, Codable {
     }
     
     /// Updates status based on current hierarchy position and children
-    mutating func updateStatusBasedOnHierarchy(settings: AppSettings) {
-        guard !isTask else { return }
-        
-        if status.isDone {
-            return
-        }
+        /// - Parameter settings: AppSettings instance
+        /// - Parameter forceUpdate: If true, forces the status update even if it's already at the correct level
+        mutating func updateStatusBasedOnHierarchy(settings: AppSettings, forceUpdate: Bool = false) {
+            guard !isTask else { return }
+            
+            if status.isDone {
+                return
+            }
 
-        // Se está movendo para nível intermediário (qualquer nível > 0)
-        if hierarchyLevel > 0 {
-            if let subprojectStatus = settings.getStatus(for: .intermediate).first(where: { $0.rawValue == "SUBPROJECT" }) {
-                status = .custom(subprojectStatus.rawValue, colorHex: subprojectStatus.colorHex)
-            } else {
-                // Fallback para SUBPROJECT padrão
-                status = .custom("SUBPROJECT", colorHex: "#808080")
+            // Se está no nível intermediário (qualquer nível > 0)
+            if hierarchyLevel > 0 {
+                // Só atualiza se forceUpdate for true ou se o status atual não pertence ao nível intermediário
+                let intermediateStatuses = settings.getStatus(for: .intermediate)
+                if forceUpdate || !intermediateStatuses.contains(where: { $0.rawValue == status.rawValue }) {
+                    if let subprojectStatus = intermediateStatuses.first(where: { $0.rawValue == "SUBPROJECT" }) {
+                        status = .custom(subprojectStatus.rawValue, colorHex: subprojectStatus.colorHex)
+                    } else {
+                        // Fallback para SUBPROJECT padrão
+                        status = .custom("SUBPROJECT", colorHex: "#808080")
+                    }
+                }
+                return
             }
-            return
-        }
-        
-        // Se está no nível raiz (nível 0)
-        let appropriateStatuses = settings.getStatus(for: .firstLevel)
-        if !appropriateStatuses.contains(where: { $0.rawValue == status.rawValue }) {
-            if let firstStatus = appropriateStatuses.first {
-                status = .custom(firstStatus.rawValue, colorHex: firstStatus.colorHex)
+            
+            // Se está no nível raiz (nível 0)
+            let appropriateStatuses = settings.getStatus(for: .firstLevel)
+            if !appropriateStatuses.contains(where: { $0.rawValue == status.rawValue }) {
+                if let firstStatus = appropriateStatuses.first {
+                    status = .custom(firstStatus.rawValue, colorHex: firstStatus.colorHex)
+                }
             }
         }
-    }
     
     /// Removes a sub-item by its ID
     @discardableResult

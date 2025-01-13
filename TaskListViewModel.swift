@@ -358,49 +358,50 @@ class TaskListViewModel: ObservableObject {
     }
     
     // Função recursiva para atualizar níveis hierárquicos
-        private func updateHierarchyLevels(items: [Item], parentLevel: Int) -> [Item] {
-            return items.map { item in
-                var updatedItem = item
-                // Atualiza o nível hierárquico
-                updatedItem.hierarchyLevel = parentLevel
-                
-                // Só atualiza o status se o item tiver filhos
-                // Items sem filhos mantêm seu status original
-                if !updatedItem.isTask {
-                    updatedItem.updateStatusBasedOnHierarchy(settings: settings)
-                }
-                
-                // Processa os filhos recursivamente
-                if var subItems = updatedItem.subItems {
-                    updatedItem.subItems = updateHierarchyLevels(items: subItems, parentLevel: parentLevel + 1)
-                }
-                
-                return updatedItem
+    private func updateHierarchyLevels(items: [Item], parentLevel: Int) -> [Item] {
+        return items.map { item in
+            var updatedItem = item
+            // Atualiza o nível hierárquico
+            updatedItem.hierarchyLevel = parentLevel
+            
+            // Só atualiza o status se o item tiver filhos
+            // Items sem filhos mantêm seu status original
+            if !updatedItem.isTask {
+                // Não força atualização pois é apenas uma atualização de consistência
+                updatedItem.updateStatusBasedOnHierarchy(settings: settings, forceUpdate: false)
             }
+            
+            // Processa os filhos recursivamente
+            if var subItems = updatedItem.subItems {
+                updatedItem.subItems = updateHierarchyLevels(items: subItems, parentLevel: parentLevel + 1)
+            }
+            
+            return updatedItem
         }
+    }
 
-        // Função atualizada para lidar com status vazios
-        private func updateEmptyStatuses(items: inout [Item]) {
-            for index in items.indices {
-                if var subItems = items[index].subItems {
-                    updateEmptyStatuses(items: &subItems)
-                    items[index].subItems = subItems
-                    
-                    // Se tem filhos, atualiza o status baseado na hierarquia
-                    if !items[index].isTask {
-                        items[index].updateStatusBasedOnHierarchy(settings: settings)
-                    }
+    private func updateEmptyStatuses(items: inout [Item]) {
+        for index in items.indices {
+            if var subItems = items[index].subItems {
+                updateEmptyStatuses(items: &subItems)
+                items[index].subItems = subItems
+                
+                // Se tem filhos, atualiza o status baseado na hierarquia
+                if !items[index].isTask {
+                    // Não força atualização pois é apenas uma atualização de consistência
+                    items[index].updateStatusBasedOnHierarchy(settings: settings, forceUpdate: false)
                 }
             }
         }
+    }
 
         // Função para atualizar toda a árvore
-        private func updateAllHierarchyLevels() {
-            var updatedItems = updateHierarchyLevels(items: items, parentLevel: 0)
-            updateEmptyStatuses(items: &updatedItems)
-            updateDoneStatuses(items: &updatedItems)
-            items = updatedItems
-        }
+    private func updateAllHierarchyLevels() {
+        var updatedItems = updateHierarchyLevels(items: items, parentLevel: 0)
+        updateEmptyStatuses(items: &updatedItems)
+        updateDoneStatuses(items: &updatedItems)
+        items = updatedItems
+    }
     
     func dedentSelectedItem() {
         let flatList = buildFlattenedList(items: items)
@@ -422,7 +423,8 @@ class TaskListViewModel: ObservableObject {
                     parent.touch()
                     
                     child.touch()
-                    child.updateStatusBasedOnHierarchy(settings: settings)
+                    // Força atualização pois o item está sendo movido
+                    child.updateStatusBasedOnHierarchy(settings: settings, forceUpdate: true)
                     
                     items[index] = parent
                     return (child, parent)
@@ -431,7 +433,8 @@ class TaskListViewModel: ObservableObject {
                 if var subItems = items[index].subItems {
                     if let found = findParentInfo(in: &subItems) {
                         items[index].subItems = subItems
-                        items[index].updateStatusBasedOnHierarchy(settings: settings)
+                        // Não força atualização pois este item não está sendo movido
+                        items[index].updateStatusBasedOnHierarchy(settings: settings, forceUpdate: false)
                         return found
                     }
                 }
@@ -537,7 +540,8 @@ class TaskListViewModel: ObservableObject {
                 if items[index].id == selectedId {
                     var itemToMove = items.remove(at: index)
                     itemToMove.touch()
-                    itemToMove.updateStatusBasedOnHierarchy(settings: settings)
+                    // Força atualização pois o item está sendo movido
+                    itemToMove.updateStatusBasedOnHierarchy(settings: settings, forceUpdate: true)
                     return true
                 }
                 
@@ -549,10 +553,12 @@ class TaskListViewModel: ObservableObject {
                     if let removedItem = findAndRemoveItem(in: &items, id: selectedId) {
                         var itemToAdd = removedItem
                         itemToAdd.hierarchyLevel = items[index].hierarchyLevel + 1
-                        itemToAdd.updateStatusBasedOnHierarchy(settings: settings)
+                        // Força atualização pois o item está sendo movido
+                        itemToAdd.updateStatusBasedOnHierarchy(settings: settings, forceUpdate: true)
                         try? items[index].addSubItem(itemToAdd)
                         
-                        items[index].updateStatusBasedOnHierarchy(settings: settings)
+                        // Não força atualização do pai pois ele não está sendo movido
+                        items[index].updateStatusBasedOnHierarchy(settings: settings, forceUpdate: false)
                         items[index].touch()
                     }
                     
@@ -562,7 +568,8 @@ class TaskListViewModel: ObservableObject {
                 if var subItems = items[index].subItems {
                     if indent(in: &subItems, parentId: parentId) {
                         items[index].subItems = subItems
-                        items[index].updateStatusBasedOnHierarchy(settings: settings)
+                        // Não força atualização pois este item não está sendo movido
+                        items[index].updateStatusBasedOnHierarchy(settings: settings, forceUpdate: false)
                         return true
                     }
                 }
