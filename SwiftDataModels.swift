@@ -108,11 +108,13 @@ final class ItemModel {
     var completedAt: Date?
     var order: Int
     
-    @Relationship(deleteRule: .cascade, inverse: \ItemModel.subItems)
+    @Relationship(deleteRule: .nullify)
     var parent: ItemModel?
     
+    // Mantemos cascade apenas nos filhos
     @Relationship(deleteRule: .cascade)
     var subItems: [ItemModel]?
+    
     
     init(item: Item, order: Int) {
         self.id = item.id

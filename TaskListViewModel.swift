@@ -159,24 +159,30 @@ class TaskListViewModel: ObservableObject {
             saveChanges()
         }
 
-        func deleteSelectedItem() {
-            guard let selectedId = selectedItemId else { return }
-            
+    func deleteSelectedItem() {
+        guard let selectedId = selectedItemId else { return }
+        
             func deleteItem(in items: inout [Item]) -> Bool {
+                // Primeiro, procura no nível atual
                 if let index = items.firstIndex(where: { $0.id == selectedId }) {
+                    // Remove o item e todos os seus filhos de uma vez
                     items.remove(at: index)
                     return true
                 }
                 
+                // Se não encontrou no nível atual, procura recursivamente nos subníveis
                 for index in items.indices {
                     if var subItems = items[index].subItems {
                         if deleteItem(in: &subItems) {
+                            // Atualiza os subitems do pai
                             items[index].subItems = subItems
+                            // Se ficou sem filhos, atualiza o status
                             if subItems.isEmpty {
-                                // Quando perde todos os filhos, volta para o primeiro status de task
+                                items[index].subItems = nil
                                 if let todoStatus = settings.getStatus(for: .task).first {
                                     items[index].status = .custom(todoStatus.rawValue, colorHex: todoStatus.colorHex)
                                 }
+                                items[index].touch()
                             }
                             return true
                         }
@@ -184,7 +190,7 @@ class TaskListViewModel: ObservableObject {
                 }
                 return false
             }
-            
+                
             var updatedItems = items
             if deleteItem(in: &updatedItems) {
                 items = updatedItems

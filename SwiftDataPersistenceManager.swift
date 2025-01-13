@@ -195,13 +195,36 @@ extension PersistenceManager {
             let descriptor = FetchDescriptor<ItemModel>()
             let existingModels = try modelContext.fetch(descriptor)
             
-            // 2. Create a map of existing models by ID
-            let modelMap = Dictionary(uniqueKeysWithValues: existingModels.map { ($0.id, $0) })
+            // 2. Track valid IDs
+            let validIds = Set(items.flatMap { item in
+                var ids = [item.id]
+                func collectIds(from item: Item) {
+                    ids.append(item.id)
+                    if let subItems = item.subItems {
+                        subItems.forEach(collectIds)
+                    }
+                }
+                if let subItems = item.subItems {
+                    subItems.forEach(collectIds)
+                }
+                return ids
+            })
             
-            // 3. Track valid IDs
-            var validIds = Set<UUID>()
+            // 3. Delete invalid models first
+            let modelsToDelete = existingModels.filter { !validIds.contains($0.id) }
+            for model in modelsToDelete {
+                modelContext.delete(model)
+            }
             
-            // 4. Recursive function to process items and their children
+            // 4. Save deletions
+            try modelContext.save()
+            
+            // 5. Create a map of remaining models
+            let descriptor2 = FetchDescriptor<ItemModel>()
+            let remainingModels = try modelContext.fetch(descriptor2)
+            let modelMap = Dictionary(uniqueKeysWithValues: remainingModels.map { ($0.id, $0) })
+            
+            // 6. Process items and their children
             func processItem(_ item: Item, order: Int, parent: ItemModel?) -> ItemModel {
                 if let existingModel = modelMap[item.id] {
                     // Update existing model
@@ -226,9 +249,7 @@ extension PersistenceManager {
                         existingModel.subItems = nil
                     }
                     
-                    validIds.insert(item.id)
                     return existingModel
-                    
                 } else {
                     // Create new model
                     let newModel = ItemModel(item: item, order: order)
@@ -243,22 +264,16 @@ extension PersistenceManager {
                         newModel.subItems = subModels
                     }
                     
-                    validIds.insert(item.id)
                     return newModel
                 }
             }
             
-            // 5. Process all root items with their order
+            // 7. Process all root items with their order
             let _ = items.enumerated().map { index, item in
                 processItem(item, order: index, parent: nil)
             }
             
-            // 6. Delete models that are no longer valid
-            for model in existingModels where !validIds.contains(model.id) {
-                modelContext.delete(model)
-            }
-            
-            // 7. Save changes
+            // 8. Final save
             try modelContext.save()
             logger.debug("Successfully saved \(items.count) root items")
             
