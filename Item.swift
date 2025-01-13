@@ -205,13 +205,26 @@ extension Item {
             }
         }
         else if status.isDone && !shouldBeMarkedAsDone {
-            if hierarchyLevel == 0 {
-                if let firstStatus = AppSettings.shared?.getStatus(for: .firstLevel).first {
-                    status = .custom(firstStatus.rawValue, colorHex: firstStatus.colorHex)
+            // Modifiquei esta parte para considerar corretamente a hierarquia
+            if !isTask {  // Se não é uma tarefa (tem subItems)
+                // Busca o status SUBPROJECT para níveis intermediários
+                if hierarchyLevel > 0 {
+                    if let subprojectStatus = AppSettings.shared?.getStatus(for: .intermediate)
+                        .first(where: { $0.rawValue == "SUBPROJECT" }) {
+                        status = .custom(subprojectStatus.rawValue, colorHex: subprojectStatus.colorHex)
+                    }
+                }
+                // Para nível raiz (0), mantém como PROJECT
+                else {
+                    if let projectStatus = AppSettings.shared?.getStatus(for: .firstLevel)
+                        .first(where: { $0.rawValue == "PROJECT" }) {
+                        status = .custom(projectStatus.rawValue, colorHex: projectStatus.colorHex)
+                    }
                 }
             } else {
-                if let firstStatus = AppSettings.shared?.getStatus(for: .intermediate).first {
-                    status = .custom(firstStatus.rawValue, colorHex: firstStatus.colorHex)
+                // Para tarefas simples, volta para o primeiro status de task disponível
+                if let firstTaskStatus = AppSettings.shared?.getStatus(for: .task).first {
+                    status = .custom(firstTaskStatus.rawValue, colorHex: firstTaskStatus.colorHex)
                 }
             }
             completedAt = nil
