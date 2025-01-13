@@ -54,7 +54,7 @@ struct TaskListView: View {
                                 isNewItemFieldFocused: _isNewItemFieldFocused
                             )
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(viewModel.selectedItemId == itemInfo.item.id ? settings.accentColor.opacity(0.2) : Color.clear)
+                            .background(viewModel.selectedItemId == itemInfo.item.id ? settings.accentColor.opacity(settings.accentOpacity) : Color.clear)
                             .modifier(ShakeEffect(position: viewModel.selectedItemId == itemInfo.item.id ? shakePosition : 0))
                             .onChange(of: viewModel.shakeSelected) {
                                 guard viewModel.selectedItemId == itemInfo.item.id else { return }
@@ -170,7 +170,7 @@ struct TaskListView: View {
                                     }
                                     .padding(.vertical, 4)
                                     .padding(.horizontal, 8)
-                                    .background(command.rawValue == input ? Color.accentColor.opacity(0.2) : Color.clear)
+                                    .background(command.rawValue == input ? Color.accentColor.opacity(settings.accentOpacity) : Color.clear)
                                     .cornerRadius(4)
                                 }
                             }

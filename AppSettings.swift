@@ -113,12 +113,17 @@ class AppSettings: ObservableObject {
         loadStatusStyle()
         loadCustomColors()
         
-        // Adiciona os status padrão se ainda não existirem
+        // Load saved opacity or use default
+        accentOpacity = UserDefaults.standard.double(forKey: accentOpacityKey)
+        if accentOpacity == 0 { // If no saved value
+            accentOpacity = 0.2 // Default value
+        }
+        
+        // Rest of the init remains the same
         if customStatus.isEmpty {
             customStatus = Self.defaultStatuses
         }
         
-        // Carrega a cor selecionada
         Task { @MainActor in
             do {
                 let settings = try await PersistenceManager.shared.loadSettings()
@@ -187,6 +192,15 @@ class AppSettings: ObservableObject {
         let system = Self.systemColors
         let custom = customColors.map { (name: $0.name, color: $0.color) }
         return system + custom
+    }
+    
+    private let accentOpacityKey = "accentOpacity"
+
+    // Add published property for opacity
+    @Published var accentOpacity: Double = 0.2 {
+        didSet {
+            UserDefaults.standard.set(accentOpacity, forKey: accentOpacityKey)
+        }
     }
     
     /// Atualiza a cor de accent

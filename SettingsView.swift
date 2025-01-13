@@ -65,6 +65,36 @@ struct SettingsView: View {
                 .foregroundColor(.accentColor)
             }
             
+            // Add opacity slider section
+            VStack(alignment: .leading, spacing: 8) {
+                
+                HStack {
+                    Spacer()
+                    
+                    Text("Selection Opacity Amount")
+                        .font(.headline)
+                    
+                    Slider(value: $settings.accentOpacity, in: 0.1...1.0)
+                        .frame(maxWidth: 200)
+                    
+                    Text(String(format: "%.1f", settings.accentOpacity))
+                        .monospacedDigit()
+                        .foregroundColor(.secondary)
+                    
+                    Spacer()
+                }
+                
+                // Preview of opacity
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(settings.accentColor.opacity(settings.accentOpacity))
+                    .frame(height: 40)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                    )
+            }
+            .padding(.bottom, 8)
+            
             LazyVGrid(columns: [
                 GridItem(.adaptive(minimum: 100, maximum: 120), spacing: 12)
             ], spacing: 12) {
