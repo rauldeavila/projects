@@ -167,6 +167,34 @@ struct DropViewDelegate: DropDelegate {
     }
 }
 
+struct StatusStylePreview: View {
+    let style: StatusStyle
+    let isSelected: Bool
+    let hasFocus: Bool
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            let sampleStatus = ItemStatus.custom("SAMPLE", colorHex: "#007AFF")
+            
+            style.apply(
+                to: Text("SAMPLE"),
+                color: .blue,
+                status: sampleStatus,
+                fontSize: 11
+            )
+            
+            Text(style.rawValue)
+                .font(.caption)
+        }
+        .padding(8)
+        .frame(width: 120)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(hasFocus ? Color.accentColor : (isSelected ? Color.accentColor.opacity(0.5) : Color.clear), lineWidth: 2)
+        )
+    }
+}
+
 struct StatusItemView: View {
     let status: CustomStatus
     let style: StatusStyle
@@ -175,10 +203,12 @@ struct StatusItemView: View {
     
     var body: some View {
         HStack {
+            let itemStatus = ItemStatus.custom(status.rawValue, colorHex: status.colorHex)
+            
             style.apply(
                 to: Text(status.rawValue),
                 color: status.color,
-                status: .custom(status.rawValue, colorHex: status.colorHex),
+                status: itemStatus,
                 fontSize: 12
             )
             
@@ -203,31 +233,6 @@ struct StatusItemView: View {
     }
 }
 
-struct StatusStylePreview: View {
-    let style: StatusStyle
-    let isSelected: Bool
-    let hasFocus: Bool
-    
-    var body: some View {
-        VStack(spacing: 8) {
-            style.apply(
-                to: Text("SAMPLE"),
-                color: .blue,
-                status: .todo,
-                fontSize: 11
-            )
-            
-            Text(style.rawValue)
-                .font(.caption)
-        }
-        .padding(8)
-        .frame(width: 120)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(hasFocus ? Color.accentColor : (isSelected ? Color.accentColor.opacity(0.5) : Color.clear), lineWidth: 2)
-        )
-    }
-}
 
 struct AddCustomStatusView: View {
     @Binding var isPresented: Bool

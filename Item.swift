@@ -1,111 +1,64 @@
 import Foundation
 import SwiftUI
 
-/// Represents the status of an item in the task management system
 struct ItemStatus: Codable, Hashable {
     let rawValue: String
     let isCustom: Bool
-    let colorHex: String?  // Adicionamos a cor diretamente no status
+    let colorHex: String?
     
-    // Status padrão
-    static let proj = ItemStatus(rawValue: "PROJ", isCustom: false, colorHex: nil)
-    static let subProj = ItemStatus(rawValue: "SUB-PROJ", isCustom: false, colorHex: nil)
-    static let todo = ItemStatus(rawValue: "TODO", isCustom: false, colorHex: nil)
-    static let doing = ItemStatus(rawValue: "DOING", isCustom: false, colorHex: nil)
-    static let done = ItemStatus(rawValue: "DONE", isCustom: false, colorHex: nil)
-    static let someday = ItemStatus(rawValue: "SOMEDAY", isCustom: false, colorHex: nil)
-    static let maybe = ItemStatus(rawValue: "MAYBE", isCustom: false, colorHex: nil)
-    static let future = ItemStatus(rawValue: "FUTURE", isCustom: false, colorHex: nil)
+    static func custom(_ value: String, colorHex: String) -> ItemStatus {
+        ItemStatus(rawValue: value, isCustom: true, colorHex: colorHex)
+    }
     
-    static let allCases: [ItemStatus] = [
-        .proj, .subProj, .todo, .doing, .done, .someday, .maybe, .future
-    ]
-    
-    var isProjectStatus: Bool {
-        self == .proj || self == .subProj
+    var isDone: Bool {
+        rawValue == "DONE"
     }
     
     var color: Color {
         if let hex = colorHex {
             return Color(hex: hex) ?? .gray
         }
-        
-        switch self {
-        case ItemStatus.todo: return .blue
-        case ItemStatus.doing: return .orange
-        case ItemStatus.done: return .green
-        case ItemStatus.proj, ItemStatus.subProj: return .white
-        case ItemStatus.someday, ItemStatus.maybe, ItemStatus.future: return .gray
-        default: return .gray
-        }
-    }
-    
-    static func custom(_ value: String, colorHex: String) -> ItemStatus {
-        ItemStatus(rawValue: value, isCustom: true, colorHex: colorHex)
+        return .gray
     }
 }
 
-/// Represents an item in the task management system
-/// Can be a task, project, or sub-project depending on its position in the hierarchy
-/// Error types for Item operations
-enum ItemError: Error {
-    case maxNestingLevelExceeded
-    case invalidHierarchyOperation(String)
-}
-
-/// Represents an item in the task management system
-/// Can be a task, project, or sub-project depending on its position in the hierarchy
 struct Item: Identifiable, Codable {
-    /// Unique identifier for the item
     let id: UUID
-    
-    /// Title of the item
     var title: String
-    
-    var isCollapsed: Bool = false
-    
-    /// Current status of the item
+    var isCollapsed: Bool
     var status: ItemStatus
-    
-    /// Optional array of sub-items
     var subItems: [Item]?
-    
-    /// Creation date of the item
     let createdAt: Date
-    
-    /// Last modification date of the item
     var modifiedAt: Date
-    
-    /// Completion date of the item (when marked as done)
     var completedAt: Date?
+    var hierarchyLevel: Int = 0
     
-    /// Initialize a new item
     init(
-         id: UUID = UUID(),
-         title: String,
-         isCollapsed: Bool = false,
-         status: ItemStatus = .todo,
-         subItems: [Item]? = nil,
-         createdAt: Date = Date(),
-         modifiedAt: Date = Date(),
-         completedAt: Date? = nil
-     ) {
-         self.id = id
-         self.title = title
-         self.isCollapsed = isCollapsed
-         self.status = status
-         self.subItems = subItems
-         self.createdAt = createdAt
-         self.modifiedAt = modifiedAt
-         self.completedAt = completedAt
-     }
-    
-    /// Returns the nesting level of this item (0-3)
-    var nestingLevel: Int {
-        guard let subItems = subItems, !subItems.isEmpty else { return 0 }
+        id: UUID = UUID(),
+        title: String,
+        isCollapsed: Bool = false,
+        status: ItemStatus? = nil,
+        subItems: [Item]? = nil,
+        createdAt: Date = Date(),
+        modifiedAt: Date = Date(),
+        completedAt: Date? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.isCollapsed = isCollapsed
         
-        let maxSubLevel = subItems.map { $0.nestingLevel }.max() ?? 0
-        return maxSubLevel + 1
+        if let status = status {
+            self.status = status
+        } else if let todoStatus = AppSettings.shared?.getStatus(for: .task).first {
+            self.status = .custom(todoStatus.rawValue, colorHex: todoStatus.colorHex)
+        } else {
+            self.status = .custom("TODO", colorHex: "#007AFF")
+        }
+        
+        self.subItems = subItems
+        self.createdAt = createdAt
+        self.modifiedAt = modifiedAt
+        self.completedAt = completedAt
     }
     
     /// Returns true if this item is a task (no sub-items)
@@ -113,68 +66,55 @@ struct Item: Identifiable, Codable {
         subItems == nil || subItems?.isEmpty == true
     }
     
-    /// Updates status based on current hierarchy position and children
-    mutating func updateStatusBasedOnHierarchy() {
-        // If has children, should be a project or subproject
-        if !isTask {
-            if nestingLevel == 1 {
-                status = status == .done ? .done : .proj
-            } else if nestingLevel == 2 {
-                status = status == .done ? .done : .subProj
-            }
-        }
-        
-        // If all children are done, mark as done
-        if !isTask, let subItems = subItems, !subItems.isEmpty {
-            let allChildrenDone = subItems.allSatisfy { $0.status == .done }
-            if allChildrenDone {
-                status = .done
-            } else if status == .done {
-                // If any child is not done, parent can't be done
-                status = nestingLevel == 1 ? .proj : .subProj
-            }
-        }
-    }
-    
-    /// Returns true if this item is a project (has sub-items)
+    /// Returns true if this item is a root-level project
     var isProject: Bool {
-        !isTask && nestingLevel == 1
+        !isTask && hierarchyLevel == 0
     }
     
     /// Returns true if this item is a sub-project
     var isSubProject: Bool {
-        !isTask && nestingLevel == 2
+        !isTask && hierarchyLevel > 0
     }
     
-    /// Maximum allowed nesting level
-    static let maxNestingLevel = 3
-    
     /// Adds a sub-item to this item
-    /// - Parameter item: The item to add as a sub-item
-    /// - Throws: ItemError if adding the item would exceed the maximum nesting level
-    mutating func addSubItem(_ item: Item) throws {
-        // Calculate what would be the new nesting level
-        let potentialNewLevel = max(nestingLevel, item.nestingLevel + 1)
-        
-        // Check if adding this item would exceed the maximum nesting level
-        guard potentialNewLevel <= Self.maxNestingLevel else {
-            throw ItemError.maxNestingLevelExceeded
-        }
-        
-        // Initialize subItems if nil
+    mutating func addSubItem(_ item: Item) {
         if subItems == nil {
             subItems = []
         }
         
-        // Add the item and update modification date
-        subItems?.append(item)
+        var newItem = item
+        newItem.hierarchyLevel = self.hierarchyLevel + 1
+        
+        subItems?.append(newItem)
         touch()
     }
     
+    /// Updates status based on current hierarchy position and children
+    mutating func updateStatusBasedOnHierarchy(settings: AppSettings) {
+        guard !isTask else { return }
+        
+        if status.isDone {
+            return
+        }
+
+        let appropriateStatuses = hierarchyLevel == 0
+            ? settings.getStatus(for: .firstLevel)
+            : settings.getStatus(for: .intermediate)
+        
+        if !appropriateStatuses.contains(where: { $0.rawValue == status.rawValue }) {
+            if let firstStatus = appropriateStatuses.first {
+                status = .custom(firstStatus.rawValue, colorHex: firstStatus.colorHex)
+            } else {
+                // Fallback para valores padrão caso não encontre os status
+                status = .custom(
+                    hierarchyLevel == 0 ? "PROJECT" : "SUBPROJECT",
+                    colorHex: hierarchyLevel == 0 ? "#000000" : "#808080"
+                )
+            }
+        }
+    }
+    
     /// Removes a sub-item by its ID
-    /// - Parameter id: The ID of the sub-item to remove
-    /// - Returns: The removed item if found
-    /// - Throws: ItemError if the item is not found
     @discardableResult
     mutating func removeSubItem(id: UUID) throws -> Item {
         guard let index = subItems?.firstIndex(where: { $0.id == id }) else {
@@ -188,9 +128,6 @@ struct Item: Identifiable, Codable {
     }
     
     /// Moves a sub-item to a new index
-    /// - Parameters:
-    ///   - fromIndex: Current index of the sub-item
-    ///   - toIndex: Desired new index for the sub-item
     mutating func moveSubItem(fromIndex: Int, toIndex: Int) throws {
         guard let subItems = subItems,
               fromIndex >= 0, fromIndex < subItems.count,
@@ -207,44 +144,13 @@ struct Item: Identifiable, Codable {
     mutating func touch() {
         modifiedAt = Date()
     }
-    
-    /// Marks the item as done
-    mutating func markAsDone() {
-        status = .done
-        completedAt = Date()
-        touch()
-    }
 }
 
-extension ItemStatus: Equatable {
-    static func == (lhs: ItemStatus, rhs: ItemStatus) -> Bool {
-        lhs.rawValue == rhs.rawValue && lhs.isCustom == rhs.isCustom
-    }
+enum ItemError: Error {
+    case invalidHierarchyOperation(String)
 }
 
-extension ItemStatus {
-    var category: StatusCategory {
-        if isCustom {
-            // Para status customizados, precisamos buscar a categoria no AppSettings
-            // Isso será implementado depois
-            return .task
-        }
-        
-        switch self {
-        case .proj:
-            return .firstLevel
-        case .subProj:
-            return .intermediate
-        default:
-            return .task
-        }
-    }
-    
-    var isHierarchyStatus: Bool {
-        category == .firstLevel || category == .intermediate
-    }
-}
-
+// Task counting and completion status
 extension Item {
     /// Returns the count of completed and total direct tasks
     var taskCounts: (completed: Int, total: Int) {
@@ -252,18 +158,60 @@ extension Item {
         
         let total = subItems.count
         let completed = subItems.filter { item in
-            switch item.status {
-            case .done:
+            if item.status.isDone {
                 return true
-            case .proj, .subProj:
-                // For projects and subprojects, only count as done if all their tasks are done
+            }
+            
+            if !item.isTask {
                 let (completedSub, totalSub) = item.taskCounts
                 return completedSub == totalSub && totalSub > 0
-            default:
-                return false
             }
+            
+            return false
         }.count
         
         return (completed, total)
+    }
+    
+    /// Returns true if the item should be marked as done
+    var shouldBeMarkedAsDone: Bool {
+        guard !isTask else { return status.isDone }
+        
+        if let subItems = subItems, !subItems.isEmpty {
+            let (completed, total) = taskCounts
+            return completed == total
+        }
+        
+        return false
+    }
+    
+    /// Updates DONE status recursively based on children
+    mutating func updateDoneStatus() {
+        if var subItems = subItems {
+            for i in subItems.indices {
+                subItems[i].updateDoneStatus()
+            }
+            self.subItems = subItems
+        }
+        
+        if shouldBeMarkedAsDone && !status.isDone {
+            if let doneStatus = AppSettings.shared?.getStatus(for: .task)
+                .first(where: { $0.rawValue == "DONE" }) {
+                status = .custom(doneStatus.rawValue, colorHex: doneStatus.colorHex)
+                completedAt = Date()
+            }
+        }
+        else if status.isDone && !shouldBeMarkedAsDone {
+            if hierarchyLevel == 0 {
+                if let firstStatus = AppSettings.shared?.getStatus(for: .firstLevel).first {
+                    status = .custom(firstStatus.rawValue, colorHex: firstStatus.colorHex)
+                }
+            } else {
+                if let firstStatus = AppSettings.shared?.getStatus(for: .intermediate).first {
+                    status = .custom(firstStatus.rawValue, colorHex: firstStatus.colorHex)
+                }
+            }
+            completedAt = nil
+        }
     }
 }

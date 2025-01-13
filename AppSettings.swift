@@ -8,6 +8,107 @@ class AppSettings: ObservableObject {
     private let customStatusKey = "customStatus"
     private let statusStyleKey = "statusStyle"
     
+    
+    // Status padrão do sistema
+    static let defaultStatuses: [CustomStatus] = [
+        // First Level
+        CustomStatus(
+            id: UUID(),
+            name: "Project",
+            rawValue: "PROJECT",
+            colorHex: "#000000",
+            category: .firstLevel,
+            order: 0,
+            isDefault: true
+        ),
+        
+        // Intermediate Level
+        CustomStatus(
+            id: UUID(),
+            name: "Subproject",
+            rawValue: "SUBPROJECT",
+            colorHex: "#808080",
+            category: .intermediate,
+            order: 0,
+            isDefault: true
+        ),
+        
+        // Task Level - TODO com a cor azul do SwiftUI
+        CustomStatus(
+            id: UUID(),
+            name: "Todo",
+            rawValue: "TODO",
+            colorHex: "#007AFF", // Cor azul do SwiftUI
+            category: .task,
+            order: 0,
+            isDefault: true
+        ),
+        CustomStatus(
+            id: UUID(),
+            name: "Doing",
+            rawValue: "DOING",
+            colorHex: "#FFA500",
+            category: .task,
+            order: 1,
+            isDefault: true
+        ),
+        CustomStatus(
+            id: UUID(),
+            name: "Done",
+            rawValue: "DONE",
+            colorHex: "#00FF00",
+            category: .task,
+            order: 2,
+            isDefault: true
+        ),
+        CustomStatus(
+            id: UUID(),
+            name: "Someday",
+            rawValue: "SOMEDAY",
+            colorHex: "#808080",
+            category: .task,
+            order: 3,
+            isDefault: true
+        ),
+        CustomStatus(
+            id: UUID(),
+            name: "Maybe",
+            rawValue: "MAYBE",
+            colorHex: "#808080",
+            category: .task,
+            order: 4,
+            isDefault: true
+        ),
+        CustomStatus(
+            id: UUID(),
+            name: "Future",
+            rawValue: "FUTURE",
+            colorHex: "#808080",
+            category: .task,
+            order: 5,
+            isDefault: true
+        )
+    ]
+    
+    init() {
+        loadCustomStatus()
+        loadStatusStyle()
+        loadCustomColors()
+        
+        // Adiciona os status padrão se ainda não existirem
+        if customStatus.isEmpty {
+            customStatus = Self.defaultStatuses
+        }
+    }
+    
+    // Métodos auxiliares para acessar status por categoria
+    func getStatus(for category: StatusCategory) -> [CustomStatus] {
+        let categoryStatus = customStatus
+            .filter { $0.category == category }
+            .sorted { $0.order < $1.order }
+        return categoryStatus
+    }
+    
     /// As cores de accent disponíveis no sistema
     static let systemColors: [(name: String, color: Color)] = [
         ("System", .accentColor),
@@ -57,12 +158,6 @@ class AppSettings: ObservableObject {
         let system = Self.systemColors
         let custom = customColors.map { (name: $0.name, color: $0.color) }
         return system + custom
-    }
-    
-    init() {
-        loadCustomColors()
-        loadCustomStatus()
-        loadStatusStyle()
     }
     
     /// Atualiza a cor de accent
@@ -137,30 +232,15 @@ class AppSettings: ObservableObject {
         }
     }
 
-//    func addCustomStatus(name: String, rawValue: String, colorHex: String) -> Bool {
-//        // Verifica se já existe um status com este nome ou rawValue
-//        guard !customStatus.contains(where: { $0.name == name || $0.rawValue == rawValue }) else {
-//            return false
-//        }
+//    // Métodos auxiliares para acessar status por categoria
+//    func getStatus(for category: StatusCategory) -> [CustomStatus] {
+//        let defaultStatus = CustomStatus.defaultStatus(for: category)
+//        let categoryStatus = customStatus
+//            .filter { $0.category == category }
+//            .sorted { $0.order < $1.order }
 //        
-//        let newStatus = CustomStatus(id: UUID(), name: name, rawValue: rawValue, colorHex: colorHex)
-//        customStatus.append(newStatus)
-//        return true
+//        return [defaultStatus] + categoryStatus
 //    }
-
-//    func removeCustomStatus(id: UUID) {
-//        customStatus.removeAll { $0.id == id }
-//    }
-    
-    // Métodos auxiliares para acessar status por categoria
-    func getStatus(for category: StatusCategory) -> [CustomStatus] {
-        let defaultStatus = CustomStatus.defaultStatus(for: category)
-        let categoryStatus = customStatus
-            .filter { $0.category == category }
-            .sorted { $0.order < $1.order }
-        
-        return [defaultStatus] + categoryStatus
-    }
     
     func nextAvailableOrder(for category: StatusCategory) -> Int {
         let maxOrder = customStatus

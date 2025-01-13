@@ -106,7 +106,7 @@ final class ItemModel {
     var createdAt: Date
     var modifiedAt: Date
     var completedAt: Date?
-    var order: Int // New property
+    var order: Int
     
     @Relationship(deleteRule: .cascade, inverse: \ItemModel.subItems)
     var parent: ItemModel?
@@ -140,9 +140,7 @@ final class ItemModel {
             id: id,
             title: title,
             isCollapsed: isCollapsed,
-            status: statusIsCustom ?
-                .custom(statusRawValue, colorHex: statusColorHex ?? "#808080") :
-                ItemStatus.allCases.first { $0.rawValue == statusRawValue } ?? .todo,
+            status: .custom(statusRawValue, colorHex: statusColorHex ?? "#808080"),
             createdAt: createdAt,
             modifiedAt: modifiedAt,
             completedAt: completedAt

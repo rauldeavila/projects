@@ -47,7 +47,7 @@ struct ItemRowView: View {
             .scaleEffect(statusScale)
             
             // Task counter
-            if item.status == .proj || item.status == .subProj {
+            if !item.isTask {
                 let counts = item.taskCounts
                 TaskCounterView(
                     completed: counts.completed,

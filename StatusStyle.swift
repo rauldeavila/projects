@@ -76,16 +76,20 @@ enum StatusStyle: String, Codable, CaseIterable {
             .padding(.horizontal, 4)
             .padding(.vertical, 2)
         
-        // Mantém o estilo especial para PROJECT e SUBPROJECT
-        if status.isHierarchyStatus {
-            let isSubproject = status.category == .intermediate
+        // Special handling for project statuses
+        if status.rawValue == "PROJECT" {
             return AnyView(baseText
-                .foregroundStyle(isSubproject ? .gray : .white)
+                .foregroundStyle(.white)
+                .background(.black)
+                .cornerRadius(4))
+        } else if status.rawValue == "SUBPROJECT" {
+            return AnyView(baseText
+                .foregroundStyle(.gray)
                 .background(.black)
                 .cornerRadius(4))
         }
         
-        // Estilo normal para tasks
+        // Regular status styling
         switch self {
         case .system:
             return AnyView(baseText
@@ -109,4 +113,3 @@ enum StatusStyle: String, Codable, CaseIterable {
         }
     }
 }
-
