@@ -69,7 +69,7 @@ struct SettingsView: View {
         VStack(spacing: 0) {
             // Header
             HStack {
-                Text("Color Settings")
+                Text("Settings")
                     .font(.title)
                     .fontWeight(.bold)
                 Spacer()
@@ -82,6 +82,22 @@ struct SettingsView: View {
             
             ScrollView {
                 VStack(alignment: .leading, spacing: 32) {
+                    
+                    // Focus Mode Settings
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Focus Mode")
+                            .font(.headline)
+                        
+                        Toggle("Add new items in focused level", isOn: Binding(
+                            get: { settings.addItemsInFocusedLevel },
+                            set: { settings.addItemsInFocusedLevel = $0 }
+                        ))
+                        .help("When enabled, new items will be added as children of the focused item")
+                    }
+                    .padding(.bottom)
+                    
+                    Divider()
+                    
                     // Accent Color Section
                     VStack(alignment: .leading, spacing: 16) {
                         HStack {

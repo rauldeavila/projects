@@ -8,6 +8,14 @@ class AppSettings: ObservableObject {
     private let customStatusKey = "customStatus"
     private let statusStyleKey = "statusStyle"
     
+    // Focus settings
+    @Published var addItemsInFocusedLevel: Bool = false {
+        didSet {
+            UserDefaults.standard.set(addItemsInFocusedLevel, forKey: addItemsInFocusedLevelKey)
+        }
+    }
+    private let addItemsInFocusedLevelKey = "addItemsInFocusedLevel"
+    
     static let defaultStatuses: [CustomStatus] = [
             CustomStatus(
                 id: UUID(),

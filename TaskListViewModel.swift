@@ -293,9 +293,57 @@ class TaskListViewModel: ObservableObject {
         }
     }
     
+    func toggleFocusMode(forceRoot: Bool = false) {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                if focusedItemId == selectedItemId {
+                    if forceRoot {
+                        // Volta direto para a raiz
+                        focusedItemId = nil
+                    } else {
+                        // Sobe um nível na hierarquia
+                        focusedItemId = findParentId(of: selectedItemId)
+                    }
+                } else {
+                    focusedItemId = selectedItemId
+                }
+            }
+        }
+        
+    private func findParentId(of itemId: UUID?) -> UUID? {
+        guard let itemId = itemId else { return nil }
+        
+        func findInItems(_ items: [Item]) -> UUID? {
+            for item in items {
+                if let subItems = item.subItems {
+                    if subItems.contains(where: { $0.id == itemId }) {
+                        return item.id
+                    }
+                    if let found = findInItems(subItems) {
+                        return found
+                    }
+                }
+            }
+            return nil
+        }
+        
+        return findInItems(items)
+    }
+    
     func commitNewItem() {
         guard !newItemText.isEmpty else { return }
         var newItem = Item(title: newItemText)
+        
+        // Define o nível hierárquico baseado no modo foco
+        if let focusedId = focusedItemId, settings.addItemsInFocusedLevel {
+            // Tenta adicionar ao item em foco
+            if addItemToFocused(newItem) {
+                newItemText = ""
+                editingItemId = nil
+                return
+            }
+        }
+        
+        // Comportamento padrão: adiciona na raiz
         newItem.hierarchyLevel = 0
         
         // Usa o primeiro status de task disponível para novos itens
@@ -309,7 +357,37 @@ class TaskListViewModel: ObservableObject {
         newItemText = ""
         editingItemId = nil
     }
-
+    
+    private func addItemToFocused(_ newItem: Item) -> Bool {
+        guard let focusedId = focusedItemId else { return false }
+        
+        func addToItem(in items: inout [Item]) -> Bool {
+            for index in items.indices {
+                if items[index].id == focusedId {
+                    try? items[index].addSubItem(newItem)
+                    items[index].touch()
+                    return true
+                }
+                
+                if var subItems = items[index].subItems {
+                    if addToItem(in: &subItems) {
+                        items[index].subItems = subItems
+                        items[index].touch()
+                        return true
+                    }
+                }
+            }
+            return false
+        }
+        
+        var updatedItems = items
+        if addToItem(in: &updatedItems) {
+            items = updatedItems
+            saveChanges()
+            return true
+        }
+        return false
+    }
 
     private func updateItemInHierarchy(itemId: UUID, action: (inout Item) -> Void) {
         // Função recursiva para atualizar item em qualquer nível

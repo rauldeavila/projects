@@ -125,6 +125,11 @@ struct TaskListView: View {
                                 .keyboardShortcut(.return, modifiers: [.command])
                                 .opacity(0)
                                 .frame(maxWidth: 0, maxHeight: 0)
+                                
+                            Button("") { viewModel.toggleFocusMode(forceRoot: true) }
+                                .keyboardShortcut(.return, modifiers: [.command, .shift])
+                                .opacity(0)
+                                .frame(maxWidth: 0, maxHeight: 0)
                             
                             Button("") { viewModel.toggleSelectedItemCollapse() }
                                 .keyboardShortcut(KeyEquivalent("."), modifiers: .command)
@@ -249,7 +254,7 @@ struct TaskListView: View {
                 return .handled
             }
         }
-        .sheet(isPresented: $commandManager.showingColorSettings) {
+        .sheet(isPresented: $commandManager.showingSettings) {
             SettingsView(settings: settings)
         }
         .sheet(isPresented: $commandManager.showingStatusSettings) {
