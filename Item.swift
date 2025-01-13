@@ -97,19 +97,22 @@ struct Item: Identifiable, Codable {
             return
         }
 
-        let appropriateStatuses = hierarchyLevel == 0
-            ? settings.getStatus(for: .firstLevel)
-            : settings.getStatus(for: .intermediate)
+        // Se está movendo para nível intermediário (qualquer nível > 0)
+        if hierarchyLevel > 0 {
+            if let subprojectStatus = settings.getStatus(for: .intermediate).first(where: { $0.rawValue == "SUBPROJECT" }) {
+                status = .custom(subprojectStatus.rawValue, colorHex: subprojectStatus.colorHex)
+            } else {
+                // Fallback para SUBPROJECT padrão
+                status = .custom("SUBPROJECT", colorHex: "#808080")
+            }
+            return
+        }
         
+        // Se está no nível raiz (nível 0)
+        let appropriateStatuses = settings.getStatus(for: .firstLevel)
         if !appropriateStatuses.contains(where: { $0.rawValue == status.rawValue }) {
             if let firstStatus = appropriateStatuses.first {
                 status = .custom(firstStatus.rawValue, colorHex: firstStatus.colorHex)
-            } else {
-                // Fallback para valores padrão caso não encontre os status
-                status = .custom(
-                    hierarchyLevel == 0 ? "PROJECT" : "SUBPROJECT",
-                    colorHex: hierarchyLevel == 0 ? "#000000" : "#808080"
-                )
             }
         }
     }
