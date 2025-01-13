@@ -125,7 +125,7 @@ struct TaskListView: View {
                                 .keyboardShortcut(.return, modifiers: [.command])
                                 .opacity(0)
                                 .frame(maxWidth: 0, maxHeight: 0)
-                                
+
                             Button("") { viewModel.toggleFocusMode(forceRoot: true) }
                                 .keyboardShortcut(.return, modifiers: [.command, .shift])
                                 .opacity(0)

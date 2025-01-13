@@ -293,101 +293,122 @@ class TaskListViewModel: ObservableObject {
         }
     }
     
+    @Published private var isUnfocusing: Bool = false
+
+
     func toggleFocusMode(forceRoot: Bool = false) {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                if focusedItemId == selectedItemId {
-                    if forceRoot {
-                        // Volta direto para a raiz
-                        focusedItemId = nil
-                    } else {
-                        // Sobe um nível na hierarquia
-                        focusedItemId = findParentId(of: selectedItemId)
-                    }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            // Caso 1: Força voltar para raiz (command+shift+enter)
+            if forceRoot {
+                focusedItemId = nil
+                return
+            }
+            
+            // Caso 2: Não tem foco ainda - vamos focar no item selecionado
+            if focusedItemId == nil {
+                focusedItemId = selectedItemId
+                return
+            }
+            
+            // Caso 3: Está com foco e:
+            // - Se o item selecionado é o mesmo que está em foco -> desfoca (sobe nível)
+            // - Se é um item diferente -> foca nele
+            if selectedItemId == focusedItemId {
+                // Tenta subir um nível
+                if let parentId = findParentId(of: focusedItemId) {
+                    focusedItemId = parentId
                 } else {
-                    focusedItemId = selectedItemId
+                    // Se não tem pai, remove o foco
+                    focusedItemId = nil
                 }
+            } else {
+                // Foca no novo item selecionado
+                focusedItemId = selectedItemId
             }
         }
-        
-    private func findParentId(of itemId: UUID?) -> UUID? {
-        guard let itemId = itemId else { return nil }
-        
-        func findInItems(_ items: [Item]) -> UUID? {
-            for item in items {
-                if let subItems = item.subItems {
-                    if subItems.contains(where: { $0.id == itemId }) {
+    }
+        private func findParentId(of itemId: UUID?) -> UUID? {
+            guard let itemId = itemId else { return nil }
+            
+            func findParent(_ items: [Item]) -> UUID? {
+                for item in items {
+                    // Verifica se o item atual é o pai
+                    if let subItems = item.subItems,
+                       subItems.contains(where: { $0.id == itemId }) {
                         return item.id
                     }
-                    if let found = findInItems(subItems) {
+                    
+                    // Procura recursivamente nos subItems
+                    if let subItems = item.subItems,
+                       let found = findParent(subItems) {
                         return found
                     }
                 }
+                return nil
             }
-            return nil
+            
+            return findParent(items)
         }
         
-        return findInItems(items)
-    }
-    
-    func commitNewItem() {
-        guard !newItemText.isEmpty else { return }
-        var newItem = Item(title: newItemText)
-        
-        // Define o nível hierárquico baseado no modo foco
-        if let focusedId = focusedItemId, settings.addItemsInFocusedLevel {
-            // Tenta adicionar ao item em foco
-            if addItemToFocused(newItem) {
-                newItemText = ""
-                editingItemId = nil
-                return
-            }
-        }
-        
-        // Comportamento padrão: adiciona na raiz
-        newItem.hierarchyLevel = 0
-        
-        // Usa o primeiro status de task disponível para novos itens
-        if let firstTaskStatus = settings.getStatus(for: .task).first {
-            newItem.status = .custom(firstTaskStatus.rawValue, colorHex: firstTaskStatus.colorHex)
-        }
-        
-        var currentItems = items
-        currentItems.append(newItem)
-        updateItems(currentItems)
-        newItemText = ""
-        editingItemId = nil
-    }
-    
-    private func addItemToFocused(_ newItem: Item) -> Bool {
-        guard let focusedId = focusedItemId else { return false }
-        
-        func addToItem(in items: inout [Item]) -> Bool {
-            for index in items.indices {
-                if items[index].id == focusedId {
-                    try? items[index].addSubItem(newItem)
-                    items[index].touch()
-                    return true
+        func commitNewItem() {
+            guard !newItemText.isEmpty else { return }
+            var newItem = Item(title: newItemText)
+            
+            // Define o nível hierárquico baseado no modo foco
+            if let focusedId = focusedItemId, settings.addItemsInFocusedLevel {
+                // Tenta adicionar ao item em foco
+                if addItemToFocused(newItem) {
+                    newItemText = ""
+                    editingItemId = nil
+                    return
                 }
-                
-                if var subItems = items[index].subItems {
-                    if addToItem(in: &subItems) {
-                        items[index].subItems = subItems
+            }
+            
+            // Comportamento padrão: adiciona na raiz
+            newItem.hierarchyLevel = 0
+            
+            // Usa o primeiro status de task disponível para novos itens
+            if let firstTaskStatus = settings.getStatus(for: .task).first {
+                newItem.status = .custom(firstTaskStatus.rawValue, colorHex: firstTaskStatus.colorHex)
+            }
+            
+            var currentItems = items
+            currentItems.append(newItem)
+            updateItems(currentItems)
+            newItemText = ""
+            editingItemId = nil
+        }
+        
+        private func addItemToFocused(_ newItem: Item) -> Bool {
+            guard let focusedId = focusedItemId else { return false }
+            
+            func addToItem(in items: inout [Item]) -> Bool {
+                for index in items.indices {
+                    if items[index].id == focusedId {
+                        try? items[index].addSubItem(newItem)
                         items[index].touch()
                         return true
                     }
+                    
+                    if var subItems = items[index].subItems {
+                        if addToItem(in: &subItems) {
+                            items[index].subItems = subItems
+                            items[index].touch()
+                            return true
+                        }
+                    }
                 }
+                return false
+            }
+            
+            var updatedItems = items
+            if addToItem(in: &updatedItems) {
+                items = updatedItems
+                saveChanges()
+                return true
             }
             return false
         }
-        
-        var updatedItems = items
-        if addToItem(in: &updatedItems) {
-            items = updatedItems
-            saveChanges()
-            return true
-        }
-        return false
-    }
 
     private func updateItemInHierarchy(itemId: UUID, action: (inout Item) -> Void) {
         // Função recursiva para atualizar item em qualquer nível
@@ -717,16 +738,6 @@ extension TaskListViewModel {
         let level: Int
     }
     
-    func toggleFocusMode() {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-            if focusedItemId == selectedItemId {
-                focusedItemId = nil
-            } else {
-                focusedItemId = selectedItemId
-            }
-        }
-    }
-    
     func toggleSelectedItemCollapse() {
         guard let selectedId = selectedItemId else { return }
         
@@ -832,9 +843,41 @@ extension TaskListViewModel {
     }
     
     private func buildFocusedList(items: [Item], focusedId: UUID) -> [FlattenedItem] {
+        // Se estamos desfocando (subindo nível), procuramos o pai
+        if isUnfocusing {
+            func findFocusedItemAndParent(_ items: [Item]) -> (Item, Item?)? {
+                for item in items {
+                    if item.id == focusedId {
+                        return (item, nil)
+                    }
+                    
+                    if let subItems = item.subItems {
+                        for subItem in subItems {
+                            if subItem.id == focusedId {
+                                return (subItem, item)
+                            }
+                            
+                            if let (found, parent) = findFocusedItemAndParent([subItem]) {
+                                return (found, parent ?? item)
+                            }
+                        }
+                    }
+                }
+                return nil
+            }
+            
+            if let (_, parent) = findFocusedItemAndParent(items), let parentActual = parent {
+                var result = [FlattenedItem(item: parentActual, level: 0)]
+                if let subItems = parentActual.subItems {
+                    result.append(contentsOf: buildFlattenedSubItems(items: subItems, level: 1))
+                }
+                return result
+            }
+        }
+        
+        // Se estamos focando pela primeira vez ou não encontramos o pai, mostra o item focado
         for item in items {
             if item.id == focusedId {
-                // Found the focused item, return it and its children
                 var result = [FlattenedItem(item: item, level: 0)]
                 if let subItems = item.subItems {
                     result.append(contentsOf: buildFlattenedSubItems(items: subItems, level: 1))
@@ -842,11 +885,9 @@ extension TaskListViewModel {
                 return result
             }
             
-            // Look in subitems
             if let subItems = item.subItems {
                 let focusedList = buildFocusedList(items: subItems, focusedId: focusedId)
                 if !focusedList.isEmpty {
-                    // Se encontramos em um subnível, retornamos ajustando o nível para começar do 0
                     let baseLevel = focusedList[0].level
                     return focusedList.map { FlattenedItem(item: $0.item, level: $0.level - baseLevel) }
                 }
