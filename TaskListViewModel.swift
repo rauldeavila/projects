@@ -379,36 +379,50 @@ class TaskListViewModel: ObservableObject {
             editingItemId = nil
         }
         
-        private func addItemToFocused(_ newItem: Item) -> Bool {
-            guard let focusedId = focusedItemId else { return false }
-            
-            func addToItem(in items: inout [Item]) -> Bool {
-                for index in items.indices {
-                    if items[index].id == focusedId {
-                        try? items[index].addSubItem(newItem)
+    private func addItemToFocused(_ newItem: Item) -> Bool {
+        guard let focusedId = focusedItemId else { return false }
+        
+        func addToItem(in items: inout [Item]) -> Bool {
+            for index in items.indices {
+                if items[index].id == focusedId {
+                    var parentItem = items[index]
+                    
+                    // Se o item pai é uma task (não tem subItems), precisamos convertê-lo para um item intermediário
+                    if parentItem.isTask {
+                        // Busca o primeiro status intermediário disponível (SUBPROJECT por padrão)
+                        if let intermediateStatus = settings.getStatus(for: .intermediate).first {
+                            parentItem.status = .custom(intermediateStatus.rawValue, colorHex: intermediateStatus.colorHex)
+                        }
+                    }
+                    
+                    // Adiciona o novo item como filho
+                    try? parentItem.addSubItem(newItem)
+                    parentItem.touch()
+                    
+                    // Atualiza o item pai na lista
+                    items[index] = parentItem
+                    return true
+                }
+                
+                if var subItems = items[index].subItems {
+                    if addToItem(in: &subItems) {
+                        items[index].subItems = subItems
                         items[index].touch()
                         return true
                     }
-                    
-                    if var subItems = items[index].subItems {
-                        if addToItem(in: &subItems) {
-                            items[index].subItems = subItems
-                            items[index].touch()
-                            return true
-                        }
-                    }
                 }
-                return false
-            }
-            
-            var updatedItems = items
-            if addToItem(in: &updatedItems) {
-                items = updatedItems
-                saveChanges()
-                return true
             }
             return false
         }
+        
+        var updatedItems = items
+        if addToItem(in: &updatedItems) {
+            items = updatedItems
+            saveChanges()
+            return true
+        }
+        return false
+    }
 
     private func updateItemInHierarchy(itemId: UUID, action: (inout Item) -> Void) {
         // Função recursiva para atualizar item em qualquer nível

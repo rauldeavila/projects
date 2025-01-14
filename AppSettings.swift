@@ -152,17 +152,18 @@ class AppSettings: ObservableObject {
         ]
     
     init() {
+        
+        addItemsInFocusedLevel = UserDefaults.standard.bool(forKey: addItemsInFocusedLevelKey)
+
         loadCustomStatus()
         loadStatusStyle()
         loadCustomColors()
         
-        // Load saved opacity or use default
         accentOpacity = UserDefaults.standard.double(forKey: accentOpacityKey)
         if accentOpacity == 0 { // If no saved value
             accentOpacity = 0.2 // Default value
         }
         
-        // Rest of the init remains the same
         if customStatus.isEmpty {
             customStatus = Self.defaultStatuses
         }
