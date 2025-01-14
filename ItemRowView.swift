@@ -20,7 +20,7 @@ struct ItemRowView: View {
     @FocusState var isNewItemFieldFocused: Bool
     
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(alignment: .top, spacing: 8) { // Mudamos o alignment para .top aqui
             // Collapse indicator e status (mantém igual)...
             if item.subItems != nil && !item.subItems!.isEmpty {
                 Image(systemName: item.isCollapsed ? "chevron.right" : "chevron.down")
@@ -43,31 +43,31 @@ struct ItemRowView: View {
                 ? ItemStatus.custom(item.status.rawValue, colorHex: item.status.colorHex ?? "#000000", customStatus: customStatus)
                 : item.status
             
-            settings.statusStyle.apply(
-                to: Text(item.status.rawValue),
-                color: statusColor,
-                status: itemStatus,
-                fontSize: statusFontSize
-            )
-            .scaleEffect(statusScale)
-            
-            // Task counter - only show if the status allows it
-            if !item.isTask && (customStatus?.showCounter ?? true) {
-                let counts = item.taskCounts
-                TaskCounterView(
-                    completed: counts.completed,
-                    total: counts.total,
+            // VStack para o status e counter com alignment top
+            VStack(alignment: .center, spacing: 4) {
+                settings.statusStyle.apply(
+                    to: Text(item.status.rawValue),
+                    color: statusColor,
+                    status: itemStatus,
                     fontSize: statusFontSize
                 )
+                .scaleEffect(statusScale)
+                
+                // Task counter - only show if the status allows it
+                if !item.isTask && (customStatus?.showCounter ?? true) {
+                    TaskCounterView(
+                        completed: item.taskCounts.completed,
+                        total: item.taskCounts.total,
+                        fontSize: statusFontSize
+                    )
+                }
             }
-
             
             // Title area
             if isEditing {
                 if viewModel.isShowingDeleteConfirmation {
                     ZStack {
                         HStack(spacing: 12) {
-                            
                             Text("Delete this item?")
                                 .foregroundColor(.secondary)
                             
@@ -84,7 +84,6 @@ struct ItemRowView: View {
                                 .background(viewModel.deleteConfirmationOption == .no ? Color.blue : Color.gray.opacity(0.2))
                                 .foregroundColor(viewModel.deleteConfirmationOption == .no ? .white : .primary)
                                 .cornerRadius(4)
-                            
                         }
                         .font(.system(size: fontSize))
                         
@@ -166,6 +165,32 @@ struct CustomTextField: NSViewRepresentable {
     
     @State private var hasPositionedCursor = false
     
+    class InlineTextField: NSTextField {
+        var onReturn: (() -> Void)?
+        var onEmptyDelete: (() -> Void)?
+        
+        override func textShouldBeginEditing(_ textObject: NSText) -> Bool {
+            (self.cell as? NSTextFieldCell)?.wraps = true
+            (self.cell as? NSTextFieldCell)?.isScrollable = false
+            return true
+        }
+        
+        override func keyDown(with event: NSEvent) {
+            if event.keyCode == 36 { // Return key
+                onReturn?()
+                return
+            }
+            
+            if (event.keyCode == 51 || event.keyCode == 117) && // Delete or Forward Delete
+               self.stringValue.isEmpty {
+                onEmptyDelete?()
+                return
+            }
+            
+            super.keyDown(with: event)
+        }
+    }
+    
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }
@@ -181,19 +206,25 @@ struct CustomTextField: NSViewRepresentable {
         func controlTextDidChange(_ obj: Notification) {
             if let textField = obj.object as? NSTextField {
                 parent.text = textField.stringValue
+                
+                // Atualiza a altura do campo após a mudança
+                if let cell = textField.cell as? NSTextFieldCell {
+                    let frame = textField.frame
+                    let size = cell.cellSize(forBounds: NSRect(x: 0, y: 0, width: frame.width, height: .greatestFiniteMagnitude))
+                    if frame.height != size.height {
+                        textField.frame.size.height = size.height
+                    }
+                }
             }
         }
         
         func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
             if commandSelector == #selector(NSResponder.insertNewline(_:)) {
                 control.window?.makeFirstResponder(nil)
-                DispatchQueue.main.async {
-                    self.parent.onSubmit()
-                }
+                parent.onSubmit()
                 return true
             }
             
-            // Handle delete/backspace when text is empty
             if (commandSelector == #selector(NSResponder.deleteBackward(_:)) ||
                 commandSelector == #selector(NSResponder.deleteForward(_:))) &&
                 textView.string.isEmpty {
@@ -205,32 +236,52 @@ struct CustomTextField: NSViewRepresentable {
         }
     }
     
-    func makeNSView(context: Context) -> NSTextField {
-        let textField = NSTextField()
+    func makeNSView(context: Context) -> InlineTextField {
+        let textField = InlineTextField(frame: .zero)
         textField.delegate = context.coordinator
-        textField.focusRingType = .none
-        textField.drawsBackground = false
-        textField.isBezeled = false
+        textField.onReturn = onSubmit
+        textField.onEmptyDelete = onEmptyDelete
+        
+        // Configurações básicas
         textField.font = .systemFont(ofSize: fontSize)
+        textField.isBezeled = false
+        textField.drawsBackground = false
+        textField.focusRingType = .none
+        textField.lineBreakMode = .byWordWrapping
+        textField.cell?.wraps = true
+        textField.cell?.isScrollable = false
+        textField.cell?.usesSingleLineMode = false
+        
         return textField
     }
     
-    func updateNSView(_ nsView: NSTextField, context: Context) {
-        nsView.stringValue = text
-        nsView.font = .systemFont(ofSize: fontSize)
+    func updateNSView(_ textField: InlineTextField, context: Context) {
+        if textField.stringValue != text {
+            textField.stringValue = text
+            
+            // Atualiza altura se necessário
+            if let cell = textField.cell as? NSTextFieldCell {
+                let frame = textField.frame
+                let size = cell.cellSize(forBounds: NSRect(x: 0, y: 0, width: frame.width, height: .greatestFiniteMagnitude))
+                if frame.height != size.height {
+                    textField.frame.size.height = size.height
+                }
+            }
+        }
         
+        // Atualiza fonte se necessário
+        let currentSize = Double(textField.font?.pointSize ?? 0)
+        if currentSize != fontSize {
+            textField.font = .systemFont(ofSize: fontSize)
+        }
+        
+        // Posiciona o cursor se necessário
         if !hasPositionedCursor {
             DispatchQueue.main.async {
-                guard let window = nsView.window else { return }
-                window.makeFirstResponder(nsView)
-                
-                if let fieldEditor = window.fieldEditor(true, for: nsView) as? NSTextView {
-                    switch cursorPosition {
-                    case .left:
-                        fieldEditor.selectedRange = NSRange(location: 0, length: 0)
-                    case .right:
-                        fieldEditor.selectedRange = NSRange(location: text.count, length: 0)
-                    }
+                textField.window?.makeFirstResponder(textField)
+                if let fieldEditor = textField.window?.fieldEditor(true, for: textField) as? NSTextView {
+                    let location = cursorPosition == .left ? 0 : text.count
+                    fieldEditor.selectedRange = NSRange(location: location, length: 0)
                 }
                 hasPositionedCursor = true
             }

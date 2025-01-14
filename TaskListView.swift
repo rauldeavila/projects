@@ -224,18 +224,24 @@ struct TaskListView: View {
             }
             .background(Color(.textBackgroundColor))
             .onKeyPress(.upArrow) {
-                viewModel.selectPreviousItem()
-                if let selectedId = viewModel.selectedItemId {
-                    proxy.scrollTo(selectedId, anchor: .center)
+                if viewModel.editingItemId == nil {
+                    viewModel.selectPreviousItem()
+                    if let selectedId = viewModel.selectedItemId {
+                        proxy.scrollTo(selectedId, anchor: .center)
+                    }
+                    return .handled
                 }
-                return .handled
+                return .ignored
             }
             .onKeyPress(.downArrow) {
-                viewModel.selectNextItem()
-                if let selectedId = viewModel.selectedItemId {
-                    proxy.scrollTo(selectedId, anchor: .center)
+                if viewModel.editingItemId == nil {
+                    viewModel.selectNextItem()
+                    if let selectedId = viewModel.selectedItemId {
+                        proxy.scrollTo(selectedId, anchor: .center)
+                    }
+                    return .handled
                 }
-                return .handled
+                return .ignored
             }
             .onKeyPress(.space) {
                 if viewModel.editingItemId == nil && !isNewItemFieldFocused {
