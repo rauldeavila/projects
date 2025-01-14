@@ -742,6 +742,93 @@ class TaskListViewModel: ObservableObject {
         
         return result
     }
+    
+    // Handle keyboard navigation for breadcrumb
+    func handleBreadcrumbNavigation(direction: Int) {
+        guard let path = buildBreadcrumbPath() else { return }
+        guard let currentIndex = path.firstIndex(where: { $0.id == focusedItemId }) else { return }
+        
+        let newIndex = currentIndex + direction
+        guard newIndex >= 0 && newIndex < path.count else { return }
+        
+        focusedItemId = path[newIndex].id
+    }
+    
+    func buildBreadcrumbPath() -> [BreadcrumbItem]? {
+        guard let focusedId = focusedItemId else { return nil }
+        
+        var path: [BreadcrumbItem] = []
+        
+        func findPath(in items: [Item], level: Int = 0) -> Bool {
+            for item in items {
+                if item.id == focusedId {
+                    path.append(BreadcrumbItem(
+                        id: item.id,
+                        title: item.title,
+                        status: item.status,
+                        level: level
+                    ))
+                    return true
+                }
+                
+                if let subItems = item.subItems {
+                    if findPath(in: subItems, level: level + 1) {
+                        path.append(BreadcrumbItem(
+                            id: item.id,
+                            title: item.title,
+                            status: item.status,
+                            level: level
+                        ))
+                        return true
+                    }
+                }
+            }
+            return false
+        }
+        
+        _ = findPath(in: items)
+        return path.reversed()
+    }
+    
+    @Published var isBreadcrumbFocused: Bool = false
+    @Published var selectedBreadcrumbIndex: Int = -1
+    @Published var pendingBreadcrumbSelection: UUID? = nil // Novo
+
+    func toggleBreadcrumbFocus() {
+        guard focusedItemId != nil else { return }
+        
+        if !isBreadcrumbFocused {
+            if let path = buildBreadcrumbPath() {
+                isBreadcrumbFocused = true
+                selectedBreadcrumbIndex = path.count - 1
+                pendingBreadcrumbSelection = path[path.count - 1].id
+            }
+        } else {
+            isBreadcrumbFocused = false
+            selectedBreadcrumbIndex = -1
+            pendingBreadcrumbSelection = nil
+        }
+    }
+
+    func navigateBreadcrumb(direction: Int) {
+        guard isBreadcrumbFocused,
+              let path = buildBreadcrumbPath() else { return }
+        
+        let newIndex = selectedBreadcrumbIndex + direction
+        guard newIndex >= 0 && newIndex < path.count else { return }
+        
+        selectedBreadcrumbIndex = newIndex
+        pendingBreadcrumbSelection = path[newIndex].id // Apenas atualiza a seleção pendente
+    }
+
+    func commitBreadcrumbNavigation() {
+        if let pendingId = pendingBreadcrumbSelection {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                focusedItemId = pendingId
+            }
+            toggleBreadcrumbFocus() // Sai do modo de navegação após confirmar
+        }
+    }
 }
 
 extension TaskListViewModel {

@@ -140,6 +140,53 @@ struct TaskListView: View {
                                 .keyboardShortcut(KeyEquivalent("."), modifiers: [.command, .shift])
                                 .opacity(0)
                                 .frame(maxWidth: 0, maxHeight: 0)
+                            // Ativar/desativar navegação do breadcrumb
+                            Button("") {
+                                viewModel.toggleBreadcrumbFocus()
+                            }
+                            .keyboardShortcut("b", modifiers: .command)
+                            .opacity(0)
+                            .frame(maxWidth: 0, maxHeight: 0)
+
+                            // Navegar para a esquerda no breadcrumb
+                            Button("") {
+                                if viewModel.isBreadcrumbFocused {
+                                    viewModel.navigateBreadcrumb(direction: -1)
+                                }
+                            }
+                            .keyboardShortcut(.leftArrow, modifiers: [])
+                            .opacity(0)
+                            .frame(maxWidth: 0, maxHeight: 0)
+
+                            // Navegar para a direita no breadcrumb
+                            Button("") {
+                                if viewModel.isBreadcrumbFocused {
+                                    viewModel.navigateBreadcrumb(direction: 1)
+                                }
+                            }
+                            .keyboardShortcut(.rightArrow, modifiers: [])
+                            .opacity(0)
+                            .frame(maxWidth: 0, maxHeight: 0)
+
+                            // Confirmar navegação do breadcrumb
+                            Button("") {
+                                if viewModel.isBreadcrumbFocused {
+                                    viewModel.commitBreadcrumbNavigation()
+                                }
+                            }
+                            .keyboardShortcut(.return, modifiers: [])
+                            .opacity(0)
+                            .frame(maxWidth: 0, maxHeight: 0)
+
+                            // Sair da navegação do breadcrumb
+                            Button("") {
+                                if viewModel.isBreadcrumbFocused {
+                                    viewModel.toggleBreadcrumbFocus()
+                                }
+                            }
+                            .keyboardShortcut(.escape, modifiers: [])
+                            .opacity(0)
+                            .frame(maxWidth: 0, maxHeight: 0)
                         } // group
                     }
                     .frame(maxWidth: .infinity)
@@ -148,83 +195,107 @@ struct TaskListView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 
                 if viewModel.editingItemId == nil {
-                    HStack {
-                        TextField("New item...", text: $viewModel.newItemText)
-                            // Primeiro aplicamos o padding interno do texto
-                            .padding(.horizontal, 12)  // Padding interno do texto
-                            .padding(.vertical, 8)     // Padding interno do texto
-                            // Depois aplicamos os estilos visuais
-                            .background(settings.inputBarBackgroundColor)
-                            .foregroundColor(settings.inputBarTextColor)
-                            .if(settings.inputBarShowBorder) { view in
-                                view.overlay(
-                                    RoundedRectangle(cornerRadius: settings.inputBarCornerRadius)
-                                        .stroke(settings.inputBarBorderColor, lineWidth: settings.inputBarBorderWidth)
+                    VStack(spacing: 4) {
+                        // Breadcrumb acima do input
+                        if viewModel.focusedItemId != nil {
+                            if let path = viewModel.buildBreadcrumbPath() {
+                                BreadcrumbView(
+                                    path: path,
+                                    settings: settings,
+                                    onItemSelected: { id in
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                            viewModel.focusedItemId = id
+                                        }
+                                    },
+                                    selectedIndex: viewModel.selectedBreadcrumbIndex,
+                                    isFocused: viewModel.isBreadcrumbFocused
                                 )
                             }
-                            .cornerRadius(settings.inputBarCornerRadius)
-                            .textFieldStyle(.plain)
-                            .font(.system(size: baseNewItemSize * zoomLevel))
-                            .focused($isNewItemFieldFocused)
-                            .onChange(of: viewModel.newItemText) { newValue in
-                                commandManager.processInput(newValue)
-                            }
-                            .onSubmit {
-                                if case .active(let command) = commandManager.state,
-                                   let cmd = CommandManager.Command.allCases.first(where: { $0.rawValue == command }) {
-                                    commandManager.executeCommand(cmd)
-                                    viewModel.newItemText = ""
-                                } else {
-                                    viewModel.commitNewItem()
-                                }
-                                isNewItemFieldFocused = true
-                            }
-                        
-                        if case .active(let input) = commandManager.state {
-                            VStack(alignment: .leading, spacing: 8) {
-                                ForEach(commandManager.filteredCommands(input), id: \.self) { command in
-                                    HStack {
-                                        Text(command.rawValue)
-                                            .font(.system(.body, design: .monospaced))
-                                        Text(command.description)
-                                            .foregroundColor(.secondary)
-                                    }
-                                    .padding(.vertical, 4)
-                                    .padding(.horizontal, 8)
-                                    .background(command.rawValue == input ? Color.accentColor.opacity(settings.accentOpacity) : Color.clear)
-                                    .cornerRadius(4)
-                                }
-                            }
-                            .padding(8)
-                            .background(.black)
-                            .cornerRadius(8)
-                            .offset(y: -40)
                         }
                         
-                        Spacer()
-                        
-                        if viewModel.focusedItemId != nil {
-                            HStack(spacing: 8) {
-                                Button("FOCUS") {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                        viewModel.focusedItemId = nil
+                        // Input bar com botão Focus sobreposto
+                        ZStack {
+                            // TextField
+                            TextField("New item...", text: $viewModel.newItemText)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(settings.inputBarBackgroundColor)
+                                .foregroundColor(settings.inputBarTextColor)
+                                .if(settings.inputBarShowBorder) { view in
+                                    view.overlay(
+                                        RoundedRectangle(cornerRadius: settings.inputBarCornerRadius)
+                                            .stroke(settings.inputBarBorderColor, lineWidth: settings.inputBarBorderWidth)
+                                    )
+                                }
+                                .cornerRadius(settings.inputBarCornerRadius)
+                                .textFieldStyle(.plain)
+                                .font(.system(size: baseNewItemSize * zoomLevel))
+                                .focused($isNewItemFieldFocused)
+                                .onChange(of: viewModel.newItemText) { newValue in
+                                    commandManager.processInput(newValue)
+                                }
+                                .onSubmit {
+                                    if viewModel.isBreadcrumbFocused {
+                                        viewModel.commitBreadcrumbNavigation()
+                                    } else {
+                                        if case .active(let command) = commandManager.state,
+                                           let cmd = CommandManager.Command.allCases.first(where: { $0.rawValue == command }) {
+                                            commandManager.executeCommand(cmd)
+                                            viewModel.newItemText = ""
+                                        } else {
+                                            viewModel.commitNewItem()
+                                        }
+                                    }
+                                    isNewItemFieldFocused = true
+                                }
+                                .padding(.trailing, viewModel.focusedItemId != nil ? 80 : 0) // Espaço para o botão FOCUS
+                            
+                            // Botão FOCUS sobreposto à direita
+                            if viewModel.focusedItemId != nil {
+                                HStack {
+                                    Spacer()
+                                    Button("FOCUS") {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                            viewModel.focusedItemId = nil
+                                        }
+                                    }
+                                    .buttonStyle(.plain)
+                                    .foregroundColor(.red)
+                                    .padding(.horizontal, 12)
+                                    .font(.system(size: 14).bold().monospaced())
+                                }
+                            }
+                            
+                            // Command suggestions
+                            if case .active(let input) = commandManager.state {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    ForEach(commandManager.filteredCommands(input), id: \.self) { command in
+                                        HStack {
+                                            Text(command.rawValue)
+                                                .font(.system(.body, design: .monospaced))
+                                            Text(command.description)
+                                                .foregroundColor(.secondary)
+                                        }
+                                        .padding(.vertical, 4)
+                                        .padding(.horizontal, 8)
+                                        .background(command.rawValue == input ? Color.accentColor.opacity(settings.accentOpacity) : Color.clear)
+                                        .cornerRadius(4)
                                     }
                                 }
-                                .buttonStyle(.plain)
-                                .foregroundColor(.red)
-                                .padding(.trailing, 12)
-                                .font(.system(size: 14).bold().monospaced())
+                                .padding(8)
+                                .background(.black)
+                                .cornerRadius(8)
+                                .offset(y: -40)
                             }
                         }
                     }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-//                    .background(settings.backgroundColor)
                 }
             }
             .background(Color(.textBackgroundColor))
             .onKeyPress(.upArrow) {
-                if viewModel.editingItemId == nil {
+                if viewModel.editingItemId == nil && !viewModel.isBreadcrumbFocused {  // Adicionado check do breadcrumb
                     viewModel.selectPreviousItem()
                     if let selectedId = viewModel.selectedItemId {
                         proxy.scrollTo(selectedId, anchor: .center)
@@ -234,7 +305,7 @@ struct TaskListView: View {
                 return .ignored
             }
             .onKeyPress(.downArrow) {
-                if viewModel.editingItemId == nil {
+                if viewModel.editingItemId == nil && !viewModel.isBreadcrumbFocused {  // Adicionado check do breadcrumb
                     viewModel.selectNextItem()
                     if let selectedId = viewModel.selectedItemId {
                         proxy.scrollTo(selectedId, anchor: .center)
