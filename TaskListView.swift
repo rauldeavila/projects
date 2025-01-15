@@ -140,53 +140,18 @@ struct TaskListView: View {
                                 .keyboardShortcut(KeyEquivalent("."), modifiers: [.command, .shift])
                                 .opacity(0)
                                 .frame(maxWidth: 0, maxHeight: 0)
+                            
+                            
                             // Ativar/desativar navegação do breadcrumb
                             Button("") {
-                                viewModel.toggleBreadcrumbFocus()
+                                if viewModel.editingItemId == nil {
+                                    viewModel.toggleBreadcrumbFocus()
+                                }
                             }
                             .keyboardShortcut("b", modifiers: .command)
                             .opacity(0)
                             .frame(maxWidth: 0, maxHeight: 0)
 
-                            // Navegar para a esquerda no breadcrumb
-                            Button("") {
-                                if viewModel.isBreadcrumbFocused {
-                                    viewModel.navigateBreadcrumb(direction: -1)
-                                }
-                            }
-                            .keyboardShortcut(.leftArrow, modifiers: [])
-                            .opacity(0)
-                            .frame(maxWidth: 0, maxHeight: 0)
-
-                            // Navegar para a direita no breadcrumb
-                            Button("") {
-                                if viewModel.isBreadcrumbFocused {
-                                    viewModel.navigateBreadcrumb(direction: 1)
-                                }
-                            }
-                            .keyboardShortcut(.rightArrow, modifiers: [])
-                            .opacity(0)
-                            .frame(maxWidth: 0, maxHeight: 0)
-
-                            // Confirmar navegação do breadcrumb
-                            Button("") {
-                                if viewModel.isBreadcrumbFocused {
-                                    viewModel.commitBreadcrumbNavigation()
-                                }
-                            }
-                            .keyboardShortcut(.return, modifiers: [])
-                            .opacity(0)
-                            .frame(maxWidth: 0, maxHeight: 0)
-
-                            // Sair da navegação do breadcrumb
-                            Button("") {
-                                if viewModel.isBreadcrumbFocused {
-                                    viewModel.toggleBreadcrumbFocus()
-                                }
-                            }
-                            .keyboardShortcut(.escape, modifiers: [])
-                            .opacity(0)
-                            .frame(maxWidth: 0, maxHeight: 0)
                         } // group
                     }
                     .frame(maxWidth: .infinity)
@@ -294,6 +259,34 @@ struct TaskListView: View {
                 }
             }
             .background(Color(.textBackgroundColor))
+            .onKeyPress(.leftArrow) {
+                if viewModel.isBreadcrumbFocused && viewModel.editingItemId == nil {
+                    viewModel.navigateBreadcrumb(direction: -1)
+                    return .handled
+                }
+                return .ignored
+            }
+            .onKeyPress(.rightArrow) {
+                if viewModel.isBreadcrumbFocused && viewModel.editingItemId == nil {
+                    viewModel.navigateBreadcrumb(direction: 1)
+                    return .handled
+                }
+                return .ignored
+            }
+            .onKeyPress(.return) {
+                if viewModel.isBreadcrumbFocused && viewModel.editingItemId == nil {
+                    viewModel.commitBreadcrumbNavigation()
+                    return .handled
+                }
+                return .ignored
+            }
+            .onKeyPress(.escape) {
+                if viewModel.isBreadcrumbFocused && viewModel.editingItemId == nil {
+                    viewModel.toggleBreadcrumbFocus()
+                    return .handled
+                }
+                return .ignored
+            }
             .onKeyPress(.upArrow) {
                 if viewModel.editingItemId == nil && !viewModel.isBreadcrumbFocused {  // Adicionado check do breadcrumb
                     viewModel.selectPreviousItem()
