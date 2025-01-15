@@ -20,8 +20,8 @@ struct ItemRowView: View {
     @FocusState var isNewItemFieldFocused: Bool
     
     var body: some View {
-        HStack(alignment: .top, spacing: 8) { // Mudamos o alignment para .top aqui
-            // Collapse indicator e status (mantém igual)...
+        HStack(alignment: .top, spacing: 8) {
+            // Collapse indicator
             if item.subItems != nil && !item.subItems!.isEmpty {
                 Image(systemName: item.isCollapsed ? "chevron.right" : "chevron.down")
                     .font(.system(size: statusFontSize))
@@ -43,23 +43,25 @@ struct ItemRowView: View {
                 ? ItemStatus.custom(item.status.rawValue, colorHex: item.status.colorHex ?? "#000000", customStatus: customStatus)
                 : item.status
             
-            // VStack para o status e counter com alignment top
-            VStack(alignment: .center, spacing: 4) {
-                settings.statusStyle.apply(
-                    to: Text(item.status.rawValue),
-                    color: statusColor,
-                    status: itemStatus,
-                    fontSize: statusFontSize
-                )
-                .scaleEffect(statusScale)
-                
-                // Task counter - only show if the status allows it
-                if !item.isTask && (customStatus?.showCounter ?? true) {
-                    TaskCounterView(
-                        completed: item.taskCounts.completed,
-                        total: item.taskCounts.total,
+            // Use HStack for horizontal alignment but wrap in a VStack for top alignment
+            VStack(alignment: .leading) {
+                HStack(spacing: 4) {
+                    settings.statusStyle.apply(
+                        to: Text(item.status.rawValue),
+                        color: statusColor,
+                        status: itemStatus,
                         fontSize: statusFontSize
                     )
+                    .scaleEffect(statusScale)
+                    
+                    // Task counter - only show if the status allows it
+                    if !item.isTask && (customStatus?.showCounter ?? true) {
+                        TaskCounterView(
+                            completed: item.taskCounts.completed,
+                            total: item.taskCounts.total,
+                            fontSize: statusFontSize
+                        )
+                    }
                 }
             }
             
@@ -113,6 +115,7 @@ struct ItemRowView: View {
                 Text(item.title)
                     .font(.system(size: fontSize))
                     .foregroundColor(settings.textColor)
+                    .fixedSize(horizontal: false, vertical: true) // Permite quebra de linha natural
             }
         }
         .padding(.leading, CGFloat(level) * 20)
