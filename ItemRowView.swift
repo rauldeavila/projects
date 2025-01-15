@@ -118,7 +118,7 @@ struct ItemRowView: View {
                     .fixedSize(horizontal: false, vertical: true) // Permite quebra de linha natural
             }
         }
-        .padding(.leading, CGFloat(level) * 20)
+        .padding(.leading, CGFloat(level) * 40)
         .padding(.vertical, 2)
         .padding(.horizontal, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
