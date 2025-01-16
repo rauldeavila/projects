@@ -330,12 +330,6 @@ struct AddCustomStatusView: View {
                         .frame(width: 100)
                 }
                 
-                // Show counter toggle for non-task categories
-                if category != .task {
-                    Toggle("Show Task Counter", isOn: $showCounter)
-                        .padding(.top, 8)
-                }
-                
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Style Options")
                         .font(.headline)
