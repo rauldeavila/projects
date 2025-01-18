@@ -11,33 +11,48 @@ struct StatusSettingsView: View {
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 16), count: 3)
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Status Settings")
-                .font(.title)
-                .padding(.bottom)
+        VStack(alignment: .leading, spacing: 24) {
+            // Header
+            HStack {
+                Text("Status Settings")
+                    .font(.title)
+                    .fontWeight(.semibold)
+                
+                Spacer()
+                
+                Button("Done") {
+                    dismiss()
+                }
+                .keyboardShortcut(.return)
+            }
+            .padding(.bottom, 8)
             
             // Status Style Selection
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 12) {
                 Text("Status Style")
                     .font(.headline)
+                    .fontWeight(.medium)
                 
-                HStack(spacing: 16) {
-                    ForEach(Array(StatusStyle.allCases.enumerated()), id: \.element) { index, style in
-                        StatusStylePreview(
-                            style: style,
-                            isSelected: settings.statusStyle == style,
-                            hasFocus: selectedStyleIndex == index
-                        )
-                        .onTapGesture {
-                            selectedStyleIndex = index
-                            settings.statusStyle = style
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 16) {
+                        ForEach(Array(StatusStyle.allCases.enumerated()), id: \.element) { index, style in
+                            StatusStylePreview(
+                                style: style,
+                                isSelected: settings.statusStyle == style,
+                                hasFocus: selectedStyleIndex == index
+                            )
+                            .onTapGesture {
+                                selectedStyleIndex = index
+                                settings.statusStyle = style
+                            }
                         }
                     }
+                    .padding(.horizontal, 2)
                 }
             }
             
             // Status Categories Grid
-            LazyVGrid(columns: columns, spacing: 16) {
+            LazyVGrid(columns: columns, spacing: 24) {
                 ForEach(StatusCategory.allCases, id: \.self) { category in
                     StatusCategoryColumn(
                         category: category,
@@ -51,16 +66,9 @@ struct StatusSettingsView: View {
                     )
                 }
             }
-            .padding(.vertical)
-            
-            Spacer()
-            
-            Button("Done") {
-                dismiss()
-            }
-            .keyboardShortcut(.return)
+            .padding(.top, 8)
         }
-        .padding()
+        .padding(24)
         .frame(minWidth: 800, minHeight: 600)
         .alert("Error", isPresented: $showingError) {
             Button("OK") { }
@@ -81,18 +89,20 @@ struct StatusCategoryColumn: View {
     @State private var draggedStatus: CustomStatus?
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             // Header
             Text(category.rawValue)
                 .font(.headline)
+                .fontWeight(.medium)
             
             // Status List
             ScrollView {
-                LazyVStack(spacing: 8) {
+                LazyVStack(spacing: 12) {
                     ForEach(statuses) { status in
                         StatusItemView(
                             status: status,
                             style: style,
+                            settings: settings,
                             onDelete: {
                                 settings.removeCustomStatus(id: status.id)
                             }
@@ -121,13 +131,17 @@ struct StatusCategoryColumn: View {
                     }
                     .buttonStyle(.plain)
                     .background(Color.accentColor.opacity(0.1))
-                    .cornerRadius(6)
+                    .cornerRadius(8)
                 }
-                .padding()
+                .padding(12)
             }
             .frame(height: 300)
-            .background(Color.black.opacity(0.1))
-            .cornerRadius(8)
+            .background(Color(NSColor.windowBackgroundColor))
+            .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+            )
         }
         .frame(maxWidth: .infinity, alignment: .top)
         .sheet(isPresented: $isAddingStatus) {
@@ -185,12 +199,17 @@ struct StatusStylePreview: View {
             
             Text(style.rawValue)
                 .font(.caption)
+                .foregroundStyle(.secondary)
         }
-        .padding(8)
+        .padding(12)
         .frame(width: 120)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(hasFocus ? Color.accentColor : (isSelected ? Color.accentColor.opacity(0.5) : Color.clear), lineWidth: 2)
+                .fill(Color(NSColor.windowBackgroundColor))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(hasFocus ? Color.accentColor : (isSelected ? Color.accentColor.opacity(0.5) : Color.gray.opacity(0.2)), lineWidth: 1)
+                )
         )
     }
 }
@@ -198,11 +217,14 @@ struct StatusStylePreview: View {
 struct StatusItemView: View {
     let status: CustomStatus
     let style: StatusStyle
+    let settings: AppSettings
     var onDelete: (() -> Void)? = nil
     var isDragging: Bool = false
+    @State private var isEditing = false
+    @State private var isHovered = false
     
     var body: some View {
-        HStack {
+        HStack(spacing: 12) {
             let itemStatus = ItemStatus.custom(status.rawValue, colorHex: status.colorHex, customStatus: status)
             
             style.apply(
@@ -228,15 +250,32 @@ struct StatusItemView: View {
             if !status.isDefault, let onDelete = onDelete {
                 Button(action: onDelete) {
                     Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(.red.opacity(isHovered ? 1 : 0.8))
                         .font(.system(size: 12))
                 }
                 .buttonStyle(.plain)
             }
         }
-        .padding(8)
-        .background(isDragging ? Color.accentColor.opacity(0.1) : Color.clear)
-        .cornerRadius(6)
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isHovered ? Color.gray.opacity(0.1) : Color.clear)
+        )
+        .onHover { hovering in
+            isHovered = hovering
+        }
+        .onTapGesture {
+            if !status.isDefault {
+                isEditing = true
+            }
+        }
+        .sheet(isPresented: $isEditing) {
+            EditCustomStatusView(
+                isPresented: $isEditing,
+                settings: settings,
+                status: status
+            )
+        }
     }
 }
 
@@ -415,6 +454,232 @@ struct AddCustomStatusView: View {
             }
             .padding()
             .frame(width: 400)
+        }
+    }
+}
+
+struct EditCustomStatusView: View {
+    @Binding var isPresented: Bool
+    @ObservedObject var settings: AppSettings
+    let status: CustomStatus
+    
+    @State private var name: String
+    @State private var rawValue: String
+    @State private var selectedColor: Color
+    @State private var selectedBgColor: Color
+    @State private var selectedTextColor: Color
+    @State private var hex: String
+    @State private var bgHex: String
+    @State private var textHex: String
+    @State private var isEditingHex = false
+    @State private var showCounter: Bool
+    @State private var forceCustomColors: Bool
+    
+    init(isPresented: Binding<Bool>, settings: AppSettings, status: CustomStatus) {
+        self._isPresented = isPresented
+        self.settings = settings
+        self.status = status
+        
+        // Initialize state with current status values
+        _name = State(initialValue: status.name)
+        _rawValue = State(initialValue: status.rawValue)
+        _selectedColor = State(initialValue: status.color)
+        _selectedBgColor = State(initialValue: status.bgColor)
+        _selectedTextColor = State(initialValue: status.txtColor)
+        _hex = State(initialValue: status.colorHex)
+        _bgHex = State(initialValue: status.backgroundColor)
+        _textHex = State(initialValue: status.textColor)
+        _showCounter = State(initialValue: status.showCounter)
+        _forceCustomColors = State(initialValue: status.forceCustomColors)
+    }
+    
+    var body: some View {
+        VStack(spacing: 24) {
+            // Header
+            Text("Edit \(status.category.rawValue) Status")
+                .font(.title2)
+                .padding(.bottom, 8)
+            
+            // Form content in a scrollview
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Basic Information Section
+                    GroupBox("Basic Information") {
+                        VStack(alignment: .leading, spacing: 16) {
+                            // Display Name
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Display Name")
+                                    .font(.headline)
+                                TextField("e.g. In Progress", text: $name)
+                                    .textFieldStyle(.roundedBorder)
+                            }
+                            
+                            // Status Code
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Status Code")
+                                    .font(.headline)
+                                TextField("e.g. IN_PROGRESS", text: $rawValue)
+                                    .textFieldStyle(.roundedBorder)
+                                    .onChange(of: rawValue) { newValue in
+                                        rawValue = newValue.uppercased()
+                                    }
+                            }
+                        }
+                        .padding()
+                    }
+                    
+                    // Colors Section
+                    GroupBox("Colors") {
+                        VStack(alignment: .leading, spacing: 16) {
+                            // Main Color
+                            ColorPickerWithHex(
+                                title: "Status Color",
+                                color: $selectedColor,
+                                hex: $hex
+                            )
+                            
+                            // Background Color
+                            ColorPickerWithHex(
+                                title: "Background Color",
+                                color: $selectedBgColor,
+                                hex: $bgHex
+                            )
+                            
+                            // Text Color
+                            ColorPickerWithHex(
+                                title: "Text Color",
+                                color: $selectedTextColor,
+                                hex: $textHex
+                            )
+                        }
+                        .padding()
+                    }
+                    
+                    // Style Options Section
+                    GroupBox("Style Options") {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Toggle("Force Custom Colors", isOn: $forceCustomColors)
+                                .help("Always use custom colors for this status, ignoring global style")
+                            
+                            if status.category != .task {
+                                Toggle("Show Task Counter", isOn: $showCounter)
+                            }
+                        }
+                        .padding()
+                    }
+                    
+                    // Preview Section
+                    GroupBox("Preview") {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Text("Style Previews")
+                                .font(.headline)
+                            
+                            HStack(spacing: 12) {
+                                ForEach(StatusStyle.allCases, id: \.self) { style in
+                                    VStack(spacing: 8) {
+                                        let previewStatus = CustomStatus(
+                                            id: status.id,
+                                            name: name,
+                                            rawValue: rawValue.isEmpty ? "STATUS" : rawValue,
+                                            colorHex: hex,
+                                            category: status.category,
+                                            order: status.order,
+                                            isDefault: status.isDefault,
+                                            showCounter: showCounter,
+                                            backgroundColor: bgHex,
+                                            textColor: textHex,
+                                            forceCustomColors: forceCustomColors
+                                        )
+                                        
+                                        let previewItemStatus = ItemStatus.custom(
+                                            rawValue.isEmpty ? "STATUS" : rawValue,
+                                            colorHex: hex,
+                                            customStatus: previewStatus
+                                        )
+                                        
+                                        style.apply(
+                                            to: Text(rawValue.isEmpty ? "STATUS" : rawValue),
+                                            color: selectedColor,
+                                            status: previewItemStatus,
+                                            fontSize: 11
+                                        )
+                                        
+                                        Text(style.rawValue)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                        .padding()
+                    }
+                }
+                .padding()
+            }
+            
+            // Action Buttons
+            HStack(spacing: 16) {
+                Button("Cancel") {
+                    isPresented = false
+                }
+                
+                Button("Save") {
+                    settings.updateCustomStatus(
+                        id: status.id,
+                        name: name,
+                        rawValue: rawValue,
+                        colorHex: hex,
+                        showCounter: showCounter,
+                        backgroundColor: bgHex,
+                        textColor: textHex,
+                        forceCustomColors: forceCustomColors
+                    )
+                    isPresented = false
+                }
+                .keyboardShortcut(.return)
+            }
+            .padding(.vertical)
+        }
+        .frame(width: 600, height: 700)
+    }
+}
+
+struct ColorPickerWithHex: View {
+    let title: String
+    @Binding var color: Color
+    @Binding var hex: String
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.headline)
+            
+            HStack(spacing: 12) {
+                ColorPicker("", selection: $color)
+                    .labelsHidden()
+                    .onChange(of: color) { newValue in
+                        if let newHex = newValue.toHex() {
+                            hex = newHex
+                        }
+                    }
+                
+                TextField("", text: $hex)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 100)
+                    .onChange(of: hex) { newValue in
+                        if let newColor = Color(hex: newValue) {
+                            color = newColor
+                        }
+                    }
+                
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(color)
+                    .frame(width: 40, height: 24)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                    )
+            }
         }
     }
 }

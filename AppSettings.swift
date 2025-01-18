@@ -541,4 +541,41 @@ class AppSettings: ObservableObject {
         inputBarShowBorder = show
         UserDefaults.standard.set(show, forKey: inputBarShowBorderKey)
     }
+
+    func updateCustomStatus(
+        id: UUID,
+        name: String,
+        rawValue: String,
+        colorHex: String,
+        showCounter: Bool = false,
+        backgroundColor: String = "#000000",
+        textColor: String = "#FFFFFF",
+        forceCustomColors: Bool = false
+    ) {
+        guard let index = customStatus.firstIndex(where: { $0.id == id }) else { return }
+        let status = customStatus[index]
+        
+        // Check if the new name or rawValue conflicts with other statuses (except itself)
+        let otherStatuses = customStatus.filter { $0.id != id }
+        guard !otherStatuses.contains(where: { $0.name == name || $0.rawValue == rawValue }) else {
+            return
+        }
+        
+        let updatedStatus = CustomStatus(
+            id: status.id,
+            name: name,
+            rawValue: rawValue,
+            colorHex: colorHex,
+            category: status.category,
+            order: status.order,
+            isDefault: status.isDefault,
+            showCounter: showCounter,
+            backgroundColor: backgroundColor,
+            textColor: textColor,
+            forceCustomColors: forceCustomColors
+        )
+        
+        customStatus[index] = updatedStatus
+        saveCustomStatus()
+    }
 }
