@@ -1,80 +1,36 @@
 import SwiftUI
 
-struct StatusSettingsView: View {
-    @ObservedObject var settings: AppSettings
-    @Environment(\.dismiss) var dismiss
-    @State private var showingError = false
-    @State private var errorMessage = ""
-    @State private var selectedStyleIndex = 0
-    @State private var draggedStatus: CustomStatus?
-    
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 16), count: 3)
+// Additional supporting views
+struct StatusStylePreview: View {
+    let style: StatusStyle
+    let isSelected: Bool
+    let hasFocus: Bool
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            // Header
-            HStack {
-                Text("Status Settings")
-                    .font(.title)
-                    .fontWeight(.semibold)
-                
-                Spacer()
-                
-                Button("Done") {
-                    dismiss()
-                }
-                .keyboardShortcut(.return)
-            }
-            .padding(.bottom, 8)
+        VStack(spacing: 8) {
+            let sampleStatus = ItemStatus.custom("SAMPLE", colorHex: "#007AFF")
             
-            // Status Style Selection
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Status Style")
-                    .font(.headline)
-                    .fontWeight(.medium)
-                
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 16) {
-                        ForEach(Array(StatusStyle.allCases.enumerated()), id: \.element) { index, style in
-                            StatusStylePreview(
-                                style: style,
-                                isSelected: settings.statusStyle == style,
-                                hasFocus: selectedStyleIndex == index
-                            )
-                            .onTapGesture {
-                                selectedStyleIndex = index
-                                settings.statusStyle = style
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 2)
-                }
-            }
+            style.apply(
+                to: Text("SAMPLE"),
+                color: .blue,
+                status: sampleStatus,
+                fontSize: 11
+            )
             
-            // Status Categories Grid
-            LazyVGrid(columns: columns, spacing: 24) {
-                ForEach(StatusCategory.allCases, id: \.self) { category in
-                    StatusCategoryColumn(
-                        category: category,
-                        statuses: settings.getStatus(for: category),
-                        settings: settings,
-                        style: settings.statusStyle,
-                        onError: { message in
-                            errorMessage = message
-                            showingError = true
-                        }
-                    )
-                }
-            }
-            .padding(.top, 8)
+            Text(style.rawValue)
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
-        .padding(24)
-        .frame(minWidth: 800, minHeight: 600)
-        .alert("Error", isPresented: $showingError) {
-            Button("OK") { }
-        } message: {
-            Text(errorMessage)
-        }
+        .padding(12)
+        .frame(width: 120)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(NSColor.windowBackgroundColor))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(hasFocus ? Color.accentColor : (isSelected ? Color.accentColor.opacity(0.5) : Color.gray.opacity(0.2)), lineWidth: 1)
+                )
+        )
     }
 }
 
@@ -181,39 +137,6 @@ struct DropViewDelegate: DropDelegate {
     }
 }
 
-struct StatusStylePreview: View {
-    let style: StatusStyle
-    let isSelected: Bool
-    let hasFocus: Bool
-    
-    var body: some View {
-        VStack(spacing: 8) {
-            let sampleStatus = ItemStatus.custom("SAMPLE", colorHex: "#007AFF")
-            
-            style.apply(
-                to: Text("SAMPLE"),
-                color: .blue,
-                status: sampleStatus,
-                fontSize: 11
-            )
-            
-            Text(style.rawValue)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .padding(12)
-        .frame(width: 120)
-        .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(Color(NSColor.windowBackgroundColor))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(hasFocus ? Color.accentColor : (isSelected ? Color.accentColor.opacity(0.5) : Color.gray.opacity(0.2)), lineWidth: 1)
-                )
-        )
-    }
-}
-
 struct StatusItemView: View {
     let status: CustomStatus
     let style: StatusStyle
@@ -277,344 +200,231 @@ struct StatusItemView: View {
             )
         }
     }
-}
-
-struct AddCustomStatusView: View {
-    @Binding var isPresented: Bool
-    @ObservedObject var settings: AppSettings
-    let category: StatusCategory
-    let showError: (String) -> Void
+}// Form data model to manage status editor state
+struct StatusFormData {
+    var name: String
+    var rawValue: String
+    var selectedColor: Color
+    var selectedBgColor: Color
+    var selectedTextColor: Color
+    var hex: String
+    var bgHex: String
+    var textHex: String
+    var showCounter: Bool
+    var forceCustomColors: Bool
     
-    @State private var name = ""
-    @State private var rawValue = ""
-    @State private var selectedColor = Color.blue
-    @State private var selectedBgColor = Color.black
-    @State private var selectedTextColor = Color.white
-    @State private var hex = "#0000FF"
-    @State private var bgHex = "#000000"
-    @State private var textHex = "#FFFFFF"
-    @State private var isEditingHex = false
-    @State private var showCounter = false
-    @State private var forceCustomColors = false
+    static func empty() -> StatusFormData {
+        StatusFormData(
+            name: "",
+            rawValue: "",
+            selectedColor: .blue,
+            selectedBgColor: .black,
+            selectedTextColor: .white,
+            hex: "#0000FF",
+            bgHex: "#000000",
+            textHex: "#FFFFFF",
+            showCounter: false,
+            forceCustomColors: false
+        )
+    }
     
-    var body: some View {
-        VStack(spacing: 20) {
-            Text("Add \(category.rawValue) Status")
-                .font(.title2)
-            
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Display Name")
-                    .font(.headline)
-                TextField("e.g. In Progress", text: $name)
-                    .textFieldStyle(.roundedBorder)
-            }
-            
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Status Code")
-                    .font(.headline)
-                TextField("e.g. INPROG", text: $rawValue)
-                    .textFieldStyle(.roundedBorder)
-                    .onChange(of: rawValue) { newValue in
-                        rawValue = newValue.uppercased()
-                    }
-            }
-            
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Colors")
-                    .font(.headline)
-                
-                // Main Color Picker
-                HStack {
-                    Text("Main Color:")
-                    ColorPicker("", selection: $selectedColor)
-                        .labelsHidden()
-                        .onChange(of: selectedColor) { newColor in
-                            if let hexString = newColor.toHex() {
-                                isEditingHex = true
-                                hex = hexString
-                            }
-                        }
-                    TextField("", text: $hex)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 100)
-                }
-                
-                // Background Color Picker
-                HStack {
-                    Text("Background:")
-                    ColorPicker("", selection: $selectedBgColor)
-                        .labelsHidden()
-                        .onChange(of: selectedBgColor) { newColor in
-                            if let hexString = newColor.toHex() {
-                                bgHex = hexString
-                            }
-                        }
-                    TextField("", text: $bgHex)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 100)
-                }
-                
-                // Text Color Picker
-                HStack {
-                    Text("Text Color:")
-                    ColorPicker("", selection: $selectedTextColor)
-                        .labelsHidden()
-                        .onChange(of: selectedTextColor) { newColor in
-                            if let hexString = newColor.toHex() {
-                                textHex = hexString
-                            }
-                        }
-                    TextField("", text: $textHex)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 100)
-                }
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Style Options")
-                        .font(.headline)
-                    
-                    Toggle("Force Custom Colors", isOn: $forceCustomColors)
-                        .help("Always use custom colors for this status, ignoring global style")
-                    
-                    if category != .task {
-                        Toggle("Show Task Counter", isOn: $showCounter)
-                    }
-                }
-                
-                // Preview
-                Text("Preview:")
-                    .font(.headline)
-                    .padding(.top, 8)
-                
-                HStack {
-                    ForEach(StatusStyle.allCases, id: \.self) { style in
-                        let previewStatus = CustomStatus(
-                            id: UUID(),
-                            name: name,
-                            rawValue: rawValue.isEmpty ? "STATUS" : rawValue,
-                            colorHex: hex,
-                            category: category,
-                            order: 0,
-                            isDefault: false,
-                            showCounter: showCounter,
-                            backgroundColor: bgHex,
-                            textColor: textHex,
-                            forceCustomColors: false
-                        )
-                        
-                        let previewItemStatus = ItemStatus.custom(
-                            rawValue.isEmpty ? "STATUS" : rawValue,
-                            colorHex: hex,
-                            customStatus: previewStatus
-                        )
-                        
-                        style.apply(
-                            to: Text(rawValue.isEmpty ? "STATUS" : rawValue),
-                            color: selectedColor,
-                            status: previewItemStatus,
-                            fontSize: 11
-                        )
-                    }
-                }
-            }
-            
-            HStack(spacing: 16) {
-                Button("Cancel") {
-                    isPresented = false
-                }
-                
-                Button("Add") {
-                    guard !name.isEmpty else {
-                        showError("Please enter a status name")
-                        return
-                    }
-                    
-                    guard !rawValue.isEmpty else {
-                        showError("Please enter a status code")
-                        return
-                    }
-                    
-                    if !settings.addCustomStatus(
-                        name: name,
-                        rawValue: rawValue,
-                        colorHex: hex,
-                        category: category,
-                        showCounter: showCounter,
-                        backgroundColor: bgHex,
-                        textColor: textHex,
-                        forceCustomColors: forceCustomColors  // Nova propriedade
-                    ) {
-                        showError("Status name or code already exists")
-                        return
-                    }
-                    
-                    isPresented = false
-                }
-                .keyboardShortcut(.return)
-            }
-            .padding()
-            .frame(width: 400)
-        }
+    static func fromStatus(_ status: CustomStatus) -> StatusFormData {
+        StatusFormData(
+            name: status.name,
+            rawValue: status.rawValue,
+            selectedColor: status.color,
+            selectedBgColor: status.bgColor,
+            selectedTextColor: status.txtColor,
+            hex: status.colorHex,
+            bgHex: status.backgroundColor,
+            textHex: status.textColor,
+            showCounter: status.showCounter,
+            forceCustomColors: status.forceCustomColors
+        )
     }
 }
 
-struct EditCustomStatusView: View {
+struct StatusEditorView: View {
     @Binding var isPresented: Bool
     @ObservedObject var settings: AppSettings
-    let status: CustomStatus
+    let category: StatusCategory
+    let mode: EditorMode
+    let showError: (String) -> Void
     
-    @State private var name: String
-    @State private var rawValue: String
-    @State private var selectedColor: Color
-    @State private var selectedBgColor: Color
-    @State private var selectedTextColor: Color
-    @State private var hex: String
-    @State private var bgHex: String
-    @State private var textHex: String
-    @State private var isEditingHex = false
-    @State private var showCounter: Bool
-    @State private var forceCustomColors: Bool
+    enum EditorMode: Equatable {
+        case create
+        case edit(CustomStatus)
+        
+        static func == (lhs: EditorMode, rhs: EditorMode) -> Bool {
+            switch (lhs, rhs) {
+            case (.create, .create):
+                return true
+            case (.edit(let lhsStatus), .edit(let rhsStatus)):
+                return lhsStatus.id == rhsStatus.id
+            default:
+                return false
+            }
+        }
+    }
     
-    init(isPresented: Binding<Bool>, settings: AppSettings, status: CustomStatus) {
+    @State private var formData: StatusFormData
+    
+    init(isPresented: Binding<Bool>, settings: AppSettings, category: StatusCategory, mode: EditorMode, showError: @escaping (String) -> Void) {
         self._isPresented = isPresented
         self.settings = settings
-        self.status = status
+        self.category = category
+        self.mode = mode
+        self.showError = showError
         
-        // Initialize state with current status values
-        _name = State(initialValue: status.name)
-        _rawValue = State(initialValue: status.rawValue)
-        _selectedColor = State(initialValue: status.color)
-        _selectedBgColor = State(initialValue: status.bgColor)
-        _selectedTextColor = State(initialValue: status.txtColor)
-        _hex = State(initialValue: status.colorHex)
-        _bgHex = State(initialValue: status.backgroundColor)
-        _textHex = State(initialValue: status.textColor)
-        _showCounter = State(initialValue: status.showCounter)
-        _forceCustomColors = State(initialValue: status.forceCustomColors)
+        // Initialize form data based on mode
+        switch mode {
+        case .create:
+            _formData = State(initialValue: .empty())
+        case .edit(let status):
+            _formData = State(initialValue: .fromStatus(status))
+        }
     }
     
     var body: some View {
         VStack(spacing: 24) {
             // Header
-            Text("Edit \(status.category.rawValue) Status")
+            Text(mode == .create ? "Add \(category.rawValue) Status" : "Edit \(category.rawValue) Status")
                 .font(.title2)
                 .padding(.bottom, 8)
+                .padding(.top, 20)
             
             // Form content in a scrollview
             ScrollView {
                 VStack(spacing: 24) {
-                    // Basic Information Section
-                    GroupBox("Basic Information") {
-                        VStack(alignment: .leading, spacing: 16) {
-                            // Display Name
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Display Name")
-                                    .font(.headline)
-                                TextField("e.g. In Progress", text: $name)
-                                    .textFieldStyle(.roundedBorder)
-                            }
+
+                    HStack {
+                        
+                        VStack {
                             
-                            // Status Code
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Status Code")
-                                    .font(.headline)
-                                TextField("e.g. IN_PROGRESS", text: $rawValue)
-                                    .textFieldStyle(.roundedBorder)
-                                    .onChange(of: rawValue) { newValue in
-                                        rawValue = newValue.uppercased()
+                            GroupBox("Basic Information") {
+                                
+                                VStack(alignment: .leading, spacing: 16) {
+                                    // Display Name
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text("Display Name")
+                                            .font(.headline)
+                                        TextField("e.g. In Progress", text: $formData.name)
+                                            .textFieldStyle(.roundedBorder)
                                     }
+                                    
+                                    // Status Code
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text("Status Code")
+                                            .font(.headline)
+                                        TextField("e.g. IN_PROGRESS", text: $formData.rawValue)
+                                            .textFieldStyle(.roundedBorder)
+                                            .onChange(of: formData.rawValue) { newValue in
+                                                formData.rawValue = newValue.uppercased()
+                                            }
+                                    }
+                                    
+                                    HStack(spacing: 20) {
+                                        Toggle("Force Custom Colors", isOn: $formData.forceCustomColors)
+                                            .help("Always use custom colors for this status, ignoring global style")
+                                        
+                                        if category != .task {
+                                            Toggle("Show Task Counter", isOn: $formData.showCounter)
+                                        }
+                                    }
+                                    .padding(.top, 4)
+                                }
+                                .padding()
                             }
+                            
+                            Spacer()
+
+
                         }
-                        .padding()
-                    }
-                    
-                    // Colors Section
-                    GroupBox("Colors") {
-                        VStack(alignment: .leading, spacing: 16) {
-                            // Main Color
-                            ColorPickerWithHex(
-                                title: "Status Color",
-                                color: $selectedColor,
-                                hex: $hex
-                            )
-                            
-                            // Background Color
-                            ColorPickerWithHex(
-                                title: "Background Color",
-                                color: $selectedBgColor,
-                                hex: $bgHex
-                            )
-                            
-                            // Text Color
-                            ColorPickerWithHex(
-                                title: "Text Color",
-                                color: $selectedTextColor,
-                                hex: $textHex
-                            )
-                        }
-                        .padding()
-                    }
-                    
-                    // Style Options Section
-                    GroupBox("Style Options") {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Toggle("Force Custom Colors", isOn: $forceCustomColors)
-                                .help("Always use custom colors for this status, ignoring global style")
-                            
-                            if status.category != .task {
-                                Toggle("Show Task Counter", isOn: $showCounter)
+                        
+                        VStack {
+                            GroupBox("Colors") {
+                                VStack(alignment: .leading, spacing: 16) {
+                                    // Main Color
+                                    ColorPickerWithHex(
+                                        title: "Status Color",
+                                        color: $formData.selectedColor,
+                                        hex: $formData.hex
+                                    )
+                                    
+                                    // Background Color
+                                    ColorPickerWithHex(
+                                        title: "Background Color",
+                                        color: $formData.selectedBgColor,
+                                        hex: $formData.bgHex
+                                    )
+                                    
+                                    // Text Color
+                                    ColorPickerWithHex(
+                                        title: "Text Color",
+                                        color: $formData.selectedTextColor,
+                                        hex: $formData.textHex
+                                    )
+                                }
+                                .padding()
                             }
-                        }
-                        .padding()
-                    }
-                    
-                    // Preview Section
-                    GroupBox("Preview") {
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text("Style Previews")
-                                .font(.headline)
                             
-                            HStack(spacing: 12) {
-                                ForEach(StatusStyle.allCases, id: \.self) { style in
-                                    VStack(spacing: 8) {
-                                        let previewStatus = CustomStatus(
-                                            id: status.id,
-                                            name: name,
-                                            rawValue: rawValue.isEmpty ? "STATUS" : rawValue,
-                                            colorHex: hex,
-                                            category: status.category,
-                                            order: status.order,
-                                            isDefault: status.isDefault,
-                                            showCounter: showCounter,
-                                            backgroundColor: bgHex,
-                                            textColor: textHex,
-                                            forceCustomColors: forceCustomColors
-                                        )
-                                        
-                                        let previewItemStatus = ItemStatus.custom(
-                                            rawValue.isEmpty ? "STATUS" : rawValue,
-                                            colorHex: hex,
-                                            customStatus: previewStatus
-                                        )
-                                        
-                                        style.apply(
-                                            to: Text(rawValue.isEmpty ? "STATUS" : rawValue),
-                                            color: selectedColor,
-                                            status: previewItemStatus,
-                                            fontSize: 11
-                                        )
-                                        
-                                        Text(style.rawValue)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
+                            Spacer()
+                        }
+                        
+                    }
+                    .padding()
+                    
+                    VStack {
+                        GroupBox("Preview") {
+                            VStack(alignment: .leading, spacing: 16) {
+                                Text("Style Previews")
+                                    .font(.headline)
+                                
+                                HStack(spacing: 36) {
+                                    ForEach(StatusStyle.allCases, id: \.self) { style in
+                                        VStack(spacing: 8) {
+                                            let previewStatus = CustomStatus(
+                                                id: UUID(),
+                                                name: formData.name,
+                                                rawValue: formData.rawValue.isEmpty ? "STATUS" : formData.rawValue,
+                                                colorHex: formData.hex,
+                                                category: category,
+                                                order: 0,
+                                                isDefault: false,
+                                                showCounter: formData.showCounter,
+                                                backgroundColor: formData.bgHex,
+                                                textColor: formData.textHex,
+                                                forceCustomColors: formData.forceCustomColors
+                                            )
+                                            
+                                            let previewItemStatus = ItemStatus.custom(
+                                                formData.rawValue.isEmpty ? "STATUS" : formData.rawValue,
+                                                colorHex: formData.hex,
+                                                customStatus: previewStatus
+                                            )
+                                            
+                                            style.apply(
+                                                to: Text(formData.rawValue.isEmpty ? "STATUS" : formData.rawValue),
+                                                color: formData.selectedColor,
+                                                status: previewItemStatus,
+                                                fontSize: 11
+                                            )
+                                            
+                                            Text(style.rawValue)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
                                     }
                                 }
+                                .frame(maxWidth: .infinity)
                             }
+                            .frame(maxWidth: .infinity)
+                            .padding()
                         }
                         .padding()
                     }
+                    .padding(.top, -70)
                 }
-                .padding()
             }
             
             // Action Buttons
@@ -623,27 +433,92 @@ struct EditCustomStatusView: View {
                     isPresented = false
                 }
                 
-                Button("Save") {
-                    settings.updateCustomStatus(
-                        id: status.id,
-                        name: name,
-                        rawValue: rawValue,
-                        colorHex: hex,
-                        showCounter: showCounter,
-                        backgroundColor: bgHex,
-                        textColor: textHex,
-                        forceCustomColors: forceCustomColors
-                    )
+                Button(mode == .create ? "Add" : "Save") {
+                    switch mode {
+                    case .create:
+                        if formData.name.isEmpty {
+                            showError("Please enter a status name")
+                            return
+                        }
+                        
+                        if formData.rawValue.isEmpty {
+                            showError("Please enter a status code")
+                            return
+                        }
+                        
+                        if !settings.addCustomStatus(
+                            name: formData.name,
+                            rawValue: formData.rawValue,
+                            colorHex: formData.hex,
+                            category: category,
+                            showCounter: formData.showCounter,
+                            backgroundColor: formData.bgHex,
+                            textColor: formData.textHex,
+                            forceCustomColors: formData.forceCustomColors
+                        ) {
+                            showError("Status name or code already exists")
+                            return
+                        }
+                        
+                    case .edit(let status):
+                        settings.updateCustomStatus(
+                            id: status.id,
+                            name: formData.name,
+                            rawValue: formData.rawValue,
+                            colorHex: formData.hex,
+                            showCounter: formData.showCounter,
+                            backgroundColor: formData.bgHex,
+                            textColor: formData.textHex,
+                            forceCustomColors: formData.forceCustomColors
+                        )
+                    }
                     isPresented = false
                 }
                 .keyboardShortcut(.return)
             }
             .padding(.vertical)
         }
-        .frame(width: 600, height: 700)
+        .frame(width: 600, height: 550)
     }
 }
 
+// Simplified Add and Edit views that use StatusEditorView
+struct AddCustomStatusView: View {
+    @Binding var isPresented: Bool
+    @ObservedObject var settings: AppSettings
+    let category: StatusCategory
+    let showError: (String) -> Void
+    
+    var body: some View {
+        StatusEditorView(
+            isPresented: $isPresented,
+            settings: settings,
+            category: category,
+            mode: .create,
+            showError: showError
+        )
+    }
+}
+
+struct EditCustomStatusView: View {
+    @Binding var isPresented: Bool
+    @ObservedObject var settings: AppSettings
+    let status: CustomStatus
+    
+    var body: some View {
+        StatusEditorView(
+            isPresented: $isPresented,
+            settings: settings,
+            category: status.category,
+            mode: .edit(status),
+            showError: { message in
+                print("Error editing status: \(message)")
+            }
+        )
+    }
+}
+
+// Helper view for color selection
 struct ColorPickerWithHex: View {
     let title: String
     @Binding var color: Color
@@ -671,15 +546,94 @@ struct ColorPickerWithHex: View {
                             color = newColor
                         }
                     }
-                
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(color)
-                    .frame(width: 40, height: 24)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 4)
-                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                    )
+//                
+//                RoundedRectangle(cornerRadius: 4)
+//                    .fill(color)
+//                    .frame(width: 40, height: 24)
+//                    .overlay(
+//                        RoundedRectangle(cornerRadius: 4)
+//                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+//                    )
             }
+        }
+    }
+}
+
+// Import StatusSettingsView here for access by TaskListView
+public struct StatusSettingsView: View {
+    @ObservedObject var settings: AppSettings
+    @Environment(\.dismiss) var dismiss
+    @State private var showingError = false
+    @State private var errorMessage = ""
+    @State private var selectedStyleIndex = 0
+    @State private var draggedStatus: CustomStatus?
+    
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 16), count: 3)
+    
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            // Header
+            HStack {
+                Text("Status Settings")
+                    .font(.title)
+                    .fontWeight(.semibold)
+                
+                Spacer()
+                
+                Button("Done") {
+                    dismiss()
+                }
+                .keyboardShortcut(.return)
+            }
+            .padding(.bottom, 8)
+            
+            // Status Style Selection
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Status Style")
+                    .font(.headline)
+                    .fontWeight(.medium)
+                
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 16) {
+                        ForEach(Array(StatusStyle.allCases.enumerated()), id: \.element) { index, style in
+                            StatusStylePreview(
+                                style: style,
+                                isSelected: settings.statusStyle == style,
+                                hasFocus: selectedStyleIndex == index
+                            )
+                            .onTapGesture {
+                                selectedStyleIndex = index
+                                settings.statusStyle = style
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 2)
+                }
+            }
+            
+            // Status Categories Grid
+            LazyVGrid(columns: columns, spacing: 24) {
+                ForEach(StatusCategory.allCases, id: \.self) { category in
+                    StatusCategoryColumn(
+                        category: category,
+                        statuses: settings.getStatus(for: category),
+                        settings: settings,
+                        style: settings.statusStyle,
+                        onError: { message in
+                            errorMessage = message
+                            showingError = true
+                        }
+                    )
+                }
+            }
+            .padding(.top, 8)
+        }
+        .padding(24)
+        .frame(minWidth: 800, minHeight: 600)
+        .alert("Error", isPresented: $showingError) {
+            Button("OK") { }
+        } message: {
+            Text(errorMessage)
         }
     }
 }
