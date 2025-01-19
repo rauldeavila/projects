@@ -27,6 +27,10 @@ class TaskListViewModel: ObservableObject {
     @Published var deleteConfirmationOption: DeleteOption = .yes
     @Published var selectedStatusFilter: ItemStatus?
     
+    @Published var isInSearchMode: Bool = false
+    @Published var selectedChipIndex: Int = -1
+    @Published var searchText: String = ""
+    
     @ObservedObject var settings: AppSettings
     
     
@@ -42,7 +46,58 @@ class TaskListViewModel: ObservableObject {
             selectedStatusFilter = status
         }
     }
-
+    
+    private var textFilter: String {
+        isInSearchMode ? searchText : ""
+    }
+    
+    func navigateChips(direction: Int) {
+        guard isInSearchMode else { return }
+        
+        let totalChips = settings.getStatus(for: .task).count
+        if totalChips == 0 { return }
+        
+        // Se não tem chip selecionado, começa do início
+        if selectedChipIndex == -1 {
+            selectedChipIndex = 0
+            return
+        }
+        
+        // Calcula novo índice
+        let newIndex = selectedChipIndex + direction
+        if newIndex >= 0 && newIndex < totalChips {
+            selectedChipIndex = newIndex
+        }
+    }
+    
+    // Confirma seleção do chip atual
+    func confirmChipSelection() {
+        guard isInSearchMode, selectedChipIndex >= 0 else { return }
+        
+        let statuses = settings.getStatus(for: .task)
+        guard selectedChipIndex < statuses.count else { return }
+        
+        let selectedStatus = statuses[selectedChipIndex]
+        let itemStatus = ItemStatus.custom(
+            selectedStatus.rawValue,
+            colorHex: selectedStatus.colorHex,
+            customStatus: selectedStatus
+        )
+        
+        toggleStatusFilter(itemStatus)
+    }
+    
+    // Entrar/sair do modo busca
+    func toggleSearchMode() {
+        isInSearchMode.toggle()
+        if !isInSearchMode {
+            // Limpa estados de busca ao sair
+            searchText = ""
+            selectedChipIndex = -1
+            selectedStatusFilter = nil
+        }
+    }
+    
     
     private func saveChanges() {
         logger.debug("Saving changes. Current items count: \(self.items.count)")
@@ -742,9 +797,13 @@ class TaskListViewModel: ObservableObject {
         var result: [FlattenedItem] = []
         
         for item in items {
-            let shouldIncludeParent = selectedStatusFilter == nil ||
-                hasChildrenMatchingFilter(item) ||
-                item.status.rawValue == selectedStatusFilter?.rawValue
+            let matchesText = textFilter.isEmpty ||
+                            item.title.localizedCaseInsensitiveContains(textFilter)
+            let matchesStatus = selectedStatusFilter == nil ||
+                              hasChildrenMatchingFilter(item) ||
+                              item.status.rawValue == selectedStatusFilter?.rawValue
+            
+            let shouldIncludeParent = matchesText && matchesStatus
             
             if shouldIncludeParent {
                 result.append(FlattenedItem(item: item, level: level))

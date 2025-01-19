@@ -1,8 +1,40 @@
 import SwiftUI
 
+struct StatusFiltersView: View {
+    @ObservedObject var viewModel: TaskListViewModel
+    @ObservedObject var settings: AppSettings
+    
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(Array(settings.getStatus(for: .task).enumerated()), id: \.element.rawValue) { index, customStatus in
+                    let itemStatus = ItemStatus.custom(
+                        customStatus.rawValue,
+                        colorHex: customStatus.colorHex,
+                        customStatus: customStatus
+                    )
+                    
+                    StatusFilterChip(
+                        status: itemStatus,
+                        isSelected: viewModel.selectedStatusFilter?.rawValue == itemStatus.rawValue,
+                        isHighlighted: viewModel.isInSearchMode && viewModel.selectedChipIndex == index,
+                        settings: settings
+                    ) {
+                        viewModel.toggleStatusFilter(itemStatus)
+                    }
+                }
+            }
+            .padding(.horizontal, 8)
+        }
+        .frame(height: 32)
+        .background(settings.backgroundColor)
+    }
+}
+
 struct StatusFilterChip: View {
     let status: ItemStatus
     let isSelected: Bool
+    let isHighlighted: Bool
     let settings: AppSettings
     let onTap: () -> Void
     
@@ -24,38 +56,8 @@ struct StatusFilterChip: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 6)
-                .stroke(isSelected ? settings.accentColor : Color.clear, lineWidth: 1)
+                .stroke(isHighlighted ? settings.accentColor : (isSelected ? settings.accentColor.opacity(0.5) : Color.clear),
+                       lineWidth: isHighlighted ? 2 : 1)
         )
-    }
-}
-
-struct StatusFiltersView: View {
-    @ObservedObject var viewModel: TaskListViewModel
-    @ObservedObject var settings: AppSettings
-    
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                // Todos os status de task (mais comuns para filtrar)
-                ForEach(settings.getStatus(for: .task), id: \.rawValue) { customStatus in
-                    let itemStatus = ItemStatus.custom(
-                        customStatus.rawValue,
-                        colorHex: customStatus.colorHex,
-                        customStatus: customStatus
-                    )
-                    
-                    StatusFilterChip(
-                        status: itemStatus,
-                        isSelected: viewModel.selectedStatusFilter?.rawValue == itemStatus.rawValue,
-                        settings: settings
-                    ) {
-                        viewModel.toggleStatusFilter(itemStatus)
-                    }
-                }
-            }
-            .padding(.horizontal, 8)
-        }
-        .frame(height: 32)
-        .background(settings.backgroundColor)
     }
 }

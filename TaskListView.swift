@@ -155,6 +155,16 @@ struct TaskListView: View {
                             .keyboardShortcut("b", modifiers: .command)
                             .opacity(0)
                             .frame(maxWidth: 0, maxHeight: 0)
+                            
+                            // search & filter
+                            Button("") {
+                                if viewModel.editingItemId == nil {
+                                    viewModel.toggleSearchMode()
+                                }
+                            }
+                            .keyboardShortcut("f", modifiers: .command)
+                            .opacity(0)
+                            .frame(maxWidth: 0, maxHeight: 0)
 
                         } // group
                     }
@@ -185,7 +195,10 @@ struct TaskListView: View {
                         // Input bar com botão Focus sobreposto
                         ZStack {
                             // TextField
-                            TextField("New item...", text: $viewModel.newItemText)
+                            TextField(
+                                viewModel.isInSearchMode ? "Search..." : "New item...",
+                                text: viewModel.isInSearchMode ? $viewModel.searchText : $viewModel.newItemText
+                            )
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 8)
                                 .background(settings.inputBarBackgroundColor)
@@ -264,6 +277,10 @@ struct TaskListView: View {
             }
             .background(Color(.textBackgroundColor))
             .onKeyPress(.leftArrow) {
+                if viewModel.isInSearchMode {
+                    viewModel.navigateChips(direction: -1)
+                    return .handled
+                }
                 if viewModel.isBreadcrumbFocused && viewModel.editingItemId == nil {
                     viewModel.navigateBreadcrumb(direction: -1)
                     return .handled
@@ -271,6 +288,10 @@ struct TaskListView: View {
                 return .ignored
             }
             .onKeyPress(.rightArrow) {
+                if viewModel.isInSearchMode {
+                    viewModel.navigateChips(direction: 1)
+                    return .handled
+                }
                 if viewModel.isBreadcrumbFocused && viewModel.editingItemId == nil {
                     viewModel.navigateBreadcrumb(direction: 1)
                     return .handled
@@ -278,6 +299,10 @@ struct TaskListView: View {
                 return .ignored
             }
             .onKeyPress(.return) {
+                if viewModel.isInSearchMode {
+                    viewModel.confirmChipSelection()
+                    return .handled
+                }
                 if viewModel.isBreadcrumbFocused && viewModel.editingItemId == nil {
                     viewModel.commitBreadcrumbNavigation()
                     return .handled
@@ -285,6 +310,10 @@ struct TaskListView: View {
                 return .ignored
             }
             .onKeyPress(.escape) {
+                if viewModel.isInSearchMode {
+                    viewModel.toggleSearchMode()
+                    return .handled
+                }
                 if viewModel.isBreadcrumbFocused && viewModel.editingItemId == nil {
                     viewModel.toggleBreadcrumbFocus()
                     return .handled
