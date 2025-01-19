@@ -800,7 +800,9 @@ class TaskListViewModel: ObservableObject {
         
         for item in items {
             let matchesText = textFilter.isEmpty ||
-                            item.title.localizedCaseInsensitiveContains(textFilter)
+                             item.title.localizedCaseInsensitiveContains(textFilter) ||
+                             hasChildMatchingText(item)
+            
             let matchesStatus = selectedStatusFilter == nil ||
                               hasChildrenMatchingFilter(item) ||
                               item.status.rawValue == selectedStatusFilter?.rawValue
@@ -817,6 +819,18 @@ class TaskListViewModel: ObservableObject {
         }
         
         return result
+    }
+    
+    private func hasChildMatchingText(_ item: Item) -> Bool {
+        guard !textFilter.isEmpty else { return false }
+        
+        if let subItems = item.subItems {
+            return subItems.contains { subItem in
+                subItem.title.localizedCaseInsensitiveContains(textFilter) ||
+                hasChildMatchingText(subItem)
+            }
+        }
+        return false
     }
     
     // Modified buildFlattenedSubItems to respect collapsed state
