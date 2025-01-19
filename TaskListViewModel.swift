@@ -25,6 +25,7 @@ class TaskListViewModel: ObservableObject {
     @Published private var allCollapsed: Bool = false
     @Published var isShowingDeleteConfirmation: Bool = false
     @Published var deleteConfirmationOption: DeleteOption = .yes
+    @Published var selectedStatusFilter: ItemStatus?
     
     @ObservedObject var settings: AppSettings
     
@@ -33,6 +34,15 @@ class TaskListViewModel: ObservableObject {
         self.settings = settings
         loadItems()
     }
+    
+    func toggleStatusFilter(_ status: ItemStatus?) {
+        if selectedStatusFilter?.rawValue == status?.rawValue {
+            selectedStatusFilter = nil
+        } else {
+            selectedStatusFilter = status
+        }
+    }
+
     
     private func saveChanges() {
         logger.debug("Saving changes. Current items count: \(self.items.count)")
@@ -708,19 +718,40 @@ class TaskListViewModel: ObservableObject {
     }
     
     func buildFlattenedList(items: [Item]) -> [FlattenedItem] {
-        // If we have a focused item, return only it and its children
+        // Se temos um item focado, mantemos a lógica atual
         if let focusedId = focusedItemId {
             return buildFocusedList(items: items, focusedId: focusedId)
         }
         
+        // Caso contrário, usamos a nova lógica de filtro
+        return buildFlattenedListWithFilter(items: items)
+    }
+    
+    private func hasChildrenMatchingFilter(_ item: Item) -> Bool {
+        guard let filter = selectedStatusFilter else { return false }
+        
+        if let subItems = item.subItems {
+            return subItems.contains { subItem in
+                subItem.status.rawValue == filter.rawValue || hasChildrenMatchingFilter(subItem)
+            }
+        }
+        return false
+    }
+    
+    private func buildFlattenedListWithFilter(items: [Item], level: Int = 0) -> [FlattenedItem] {
         var result: [FlattenedItem] = []
         
         for item in items {
-            result.append(FlattenedItem(item: item, level: 0))
+            let shouldIncludeParent = selectedStatusFilter == nil ||
+                hasChildrenMatchingFilter(item) ||
+                item.status.rawValue == selectedStatusFilter?.rawValue
             
-            // Only add children if the item is not collapsed
-            if let subItems = item.subItems, !item.isCollapsed {
-                result.append(contentsOf: buildFlattenedSubItems(items: subItems, level: 1))
+            if shouldIncludeParent {
+                result.append(FlattenedItem(item: item, level: level))
+                
+                if let subItems = item.subItems, !item.isCollapsed {
+                    result.append(contentsOf: buildFlattenedListWithFilter(items: subItems, level: level + 1))
+                }
             }
         }
         

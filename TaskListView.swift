@@ -34,6 +34,10 @@ struct TaskListView: View {
                 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
+                        
+                        StatusFiltersView(viewModel: viewModel, settings: settings)
+                            .padding(.bottom, 4)
+                        
                         ForEach(viewModel.buildFlattenedList(items: viewModel.items), id: \.item.id) { itemInfo in
                             ItemRowView(
                                 id: itemInfo.item.id,

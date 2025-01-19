@@ -1,0 +1,61 @@
+import SwiftUI
+
+struct StatusFilterChip: View {
+    let status: ItemStatus
+    let isSelected: Bool
+    let settings: AppSettings
+    let onTap: () -> Void
+    
+    var body: some View {
+        Button(action: onTap) {
+            settings.statusStyle.apply(
+                to: Text(status.rawValue),
+                color: status.color,
+                status: status,
+                fontSize: 11
+            )
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isSelected ? settings.accentColor.opacity(0.2) : Color.clear)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(isSelected ? settings.accentColor : Color.clear, lineWidth: 1)
+        )
+    }
+}
+
+struct StatusFiltersView: View {
+    @ObservedObject var viewModel: TaskListViewModel
+    @ObservedObject var settings: AppSettings
+    
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                // Todos os status de task (mais comuns para filtrar)
+                ForEach(settings.getStatus(for: .task), id: \.rawValue) { customStatus in
+                    let itemStatus = ItemStatus.custom(
+                        customStatus.rawValue,
+                        colorHex: customStatus.colorHex,
+                        customStatus: customStatus
+                    )
+                    
+                    StatusFilterChip(
+                        status: itemStatus,
+                        isSelected: viewModel.selectedStatusFilter?.rawValue == itemStatus.rawValue,
+                        settings: settings
+                    ) {
+                        viewModel.toggleStatusFilter(itemStatus)
+                    }
+                }
+            }
+            .padding(.horizontal, 8)
+        }
+        .frame(height: 32)
+        .background(settings.backgroundColor)
+    }
+}
