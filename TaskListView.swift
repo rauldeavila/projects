@@ -210,6 +210,7 @@ struct TaskListView: View {
                                     )
                                 }
                                 .cornerRadius(settings.inputBarCornerRadius)
+                                .searchEffect(isInSearchMode: viewModel.isInSearchMode, settings: settings)
                                 .textFieldStyle(.plain)
                                 .font(.system(size: baseNewItemSize * zoomLevel))
                                 .focused($isNewItemFieldFocused)

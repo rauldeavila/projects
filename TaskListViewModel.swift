@@ -90,14 +90,16 @@ class TaskListViewModel: ObservableObject {
     // Entrar/sair do modo busca
     func toggleSearchMode() {
         isInSearchMode.toggle()
-        if !isInSearchMode {
+        if isInSearchMode {
+            // Seleciona o primeiro chip ao entrar no modo busca
+            selectedChipIndex = 0
+        } else {
             // Limpa estados de busca ao sair
             searchText = ""
             selectedChipIndex = -1
             selectedStatusFilter = nil
         }
     }
-    
     
     private func saveChanges() {
         logger.debug("Saving changes. Current items count: \(self.items.count)")

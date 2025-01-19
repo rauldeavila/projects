@@ -5,29 +5,32 @@ struct StatusFiltersView: View {
     @ObservedObject var settings: AppSettings
     
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(Array(settings.getStatus(for: .task).enumerated()), id: \.element.rawValue) { index, customStatus in
-                    let itemStatus = ItemStatus.custom(
-                        customStatus.rawValue,
-                        colorHex: customStatus.colorHex,
-                        customStatus: customStatus
-                    )
-                    
-                    StatusFilterChip(
-                        status: itemStatus,
-                        isSelected: viewModel.selectedStatusFilter?.rawValue == itemStatus.rawValue,
-                        isHighlighted: viewModel.isInSearchMode && viewModel.selectedChipIndex == index,
-                        settings: settings
-                    ) {
-                        viewModel.toggleStatusFilter(itemStatus)
+        if viewModel.isInSearchMode {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(Array(settings.getStatus(for: .task).enumerated()), id: \.element.rawValue) { index, customStatus in
+                        let itemStatus = ItemStatus.custom(
+                            customStatus.rawValue,
+                            colorHex: customStatus.colorHex,
+                            customStatus: customStatus
+                        )
+                        
+                        StatusFilterChip(
+                            status: itemStatus,
+                            isSelected: viewModel.selectedStatusFilter?.rawValue == itemStatus.rawValue,
+                            isHighlighted: viewModel.selectedChipIndex == index,
+                            settings: settings
+                        ) {
+                            viewModel.toggleStatusFilter(itemStatus)
+                        }
                     }
                 }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6) // Adicionei padding vertical
             }
-            .padding(.horizontal, 8)
+            .frame(height: 44) // Aumentei de 32 para 44
+            .background(settings.backgroundColor)
         }
-        .frame(height: 32)
-        .background(settings.backgroundColor)
     }
 }
 
@@ -44,12 +47,12 @@ struct StatusFilterChip: View {
                 to: Text(status.rawValue),
                 color: status.color,
                 status: status,
-                fontSize: 11
+                fontSize: 12
             )
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: 6)
                 .fill(isSelected ? settings.accentColor.opacity(0.2) : Color.clear)
@@ -59,5 +62,53 @@ struct StatusFilterChip: View {
                 .stroke(isHighlighted ? settings.accentColor : (isSelected ? settings.accentColor.opacity(0.5) : Color.clear),
                        lineWidth: isHighlighted ? 2 : 1)
         )
+    }
+}
+
+struct SearchModifier: ViewModifier {
+    let isInSearchMode: Bool
+    let settings: AppSettings
+    
+    @State private var angle: Double = 0
+    
+    func body(content: Content) -> some View {
+        content
+            .overlay(
+                RoundedRectangle(cornerRadius: settings.inputBarCornerRadius)
+                    .stroke(
+                        AngularGradient(
+                            gradient: Gradient(colors: [
+                                settings.accentColor,
+                                settings.accentColor.opacity(0.7),
+                                settings.accentColor.opacity(0.3),
+                                settings.accentColor.opacity(0.1),
+                                settings.accentColor.opacity(0.1),
+                                settings.accentColor.opacity(0.3),
+                                settings.accentColor.opacity(0.7),
+                                settings.accentColor
+                            ]),
+                            center: .center,
+                            startAngle: .degrees(angle),
+                            endAngle: .degrees(angle + 360)
+                        ),
+                        lineWidth: isInSearchMode ? 3 : 0
+                    )
+                    .opacity(isInSearchMode ? 1 : 0)
+            )
+            .onChange(of: isInSearchMode) { newValue in
+                if newValue {
+                    withAnimation(.linear(duration: 6).repeatForever(autoreverses: false)) {
+                        angle = 360
+                    }
+                } else {
+                    angle = 0
+                }
+            }
+    }
+}
+
+extension View {
+    func searchEffect(isInSearchMode: Bool, settings: AppSettings) -> some View {
+        self.modifier(SearchModifier(isInSearchMode: isInSearchMode, settings: settings))
     }
 }
