@@ -13,7 +13,7 @@ struct ProjectsApp: App {
     init() {
         // Destrói completamente o store antes de iniciar
 //        UserDefaults.standard.removeObject(forKey: "customStatus")
-        PersistenceManager.destroyPersistentStore()
+//        PersistenceManager.destroyPersistentStore()
         
         // Inicializa o singleton do AppSettings
         AppSettings.shared = AppSettings()
