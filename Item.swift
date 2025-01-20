@@ -224,9 +224,13 @@ extension Item {
             if let doneStatus = AppSettings.shared?.getStatus(for: .task)
                 .first(where: { $0.rawValue == "DONE" }) {
                 status = .custom(doneStatus.rawValue, colorHex: doneStatus.colorHex)
-                completedAt = Date()
+                // Garante que completedAt seja definido quando item muda para DONE
+                if completedAt == nil {
+                    completedAt = Date()
+                }
             }
         }
+        
         else if status.isDone && !shouldBeMarkedAsDone {
             // Modifiquei esta parte para considerar corretamente a hierarquia
             if !isTask {  // Se não é uma tarefa (tem subItems)

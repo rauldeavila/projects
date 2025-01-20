@@ -497,6 +497,9 @@ class TaskListViewModel: ObservableObject {
             for index in items.indices {
                 if items[index].id == itemId {
                     action(&items[index])
+                    if items[index].status.rawValue == "DONE" {
+                        items[index].completedAt = Date()
+                    }
                     return true
                 }
                 

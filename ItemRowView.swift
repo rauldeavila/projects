@@ -19,7 +19,14 @@ struct ItemRowView: View {
     @FocusState private var isDeleteConfirmationFocused: Bool
     @FocusState var isNewItemFieldFocused: Bool
     
+    private func formatCompletionDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return "COMPLETED AT " + formatter.string(from: date)
+    }
+    
     var body: some View {
+        
         HStack(alignment: .top, spacing: 8) {
             // Collapse indicator
             if item.subItems != nil && !item.subItems!.isEmpty {
@@ -115,7 +122,13 @@ struct ItemRowView: View {
                 Text(item.title)
                     .font(.system(size: fontSize))
                     .foregroundColor(settings.textColor)
-                    .fixedSize(horizontal: false, vertical: true) // Permite quebra de linha natural
+                    .fixedSize(horizontal: false, vertical: true)
+                
+                if item.status.rawValue == "DONE", let completedAt = item.completedAt {
+                    Text(formatCompletionDate(completedAt))
+                        .font(.system(size: fontSize * 0.9))
+                        .foregroundColor(.secondary)
+                }
             }
         }
         .padding(.leading, CGFloat(level) * 40)
