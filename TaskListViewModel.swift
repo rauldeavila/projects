@@ -392,8 +392,18 @@ class TaskListViewModel: ObservableObject {
     @Published private var isUnfocusing: Bool = false
 
 
+    // Em TaskListViewModel.swift
+
     func toggleFocusMode(forceRoot: Bool = false) {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            // Se estiver em qualquer outro modo, sai dele primeiro
+            if isInSearchMode {
+                toggleSearchMode()
+            }
+            if isInLogbookMode {
+                toggleLogbook(false)
+            }
+            
             // Caso 1: Força voltar para raiz (command+shift+enter)
             if forceRoot {
                 focusedItemId = nil
@@ -1232,7 +1242,15 @@ extension TaskListViewModel {
     func getLogbookTasks() -> [Item] {
         let doneTasks = getAllDoneTasks(from: items)
         
-        return filterTasksByPeriod(tasks: doneTasks, date: currentLogbookDate, period: logbookPeriod)
+        let filteredTasks = filterTasksByPeriod(tasks: doneTasks, date: currentLogbookDate, period: logbookPeriod)
+        
+        // Ordenar por data de conclusão, mais recentes primeiro
+        return filteredTasks.sorted { task1, task2 in
+            guard let date1 = task1.completedAt, let date2 = task2.completedAt else {
+                return false
+            }
+            return date1 > date2
+        }
     }
     
     // Função recursiva para obter todas as tarefas DONE

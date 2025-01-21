@@ -287,8 +287,9 @@ struct TaskListView: View {
                         HStack {
                             Spacer()
                             LogbookPeriodControl(viewModel: viewModel)
-                                .padding(.trailing, 16)
+                                .padding(.trailing)
                             LogbookTotalizer(viewModel: viewModel)
+                                .padding(.trailing)
                         }
                         .padding(.horizontal)
                         .padding(.bottom, 12)
@@ -433,7 +434,7 @@ struct LogbookTotalizer: View {
     @ObservedObject var viewModel: TaskListViewModel
     
     var body: some View {
-        Text("Total tasks completed in period: \(viewModel.getCurrentPeriodTaskCount())")
+        Text("Tasks: \(viewModel.getCurrentPeriodTaskCount())")
             .foregroundColor(.secondary)
             .font(.system(size: 12))
     }
