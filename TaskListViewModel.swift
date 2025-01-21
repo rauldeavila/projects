@@ -345,37 +345,42 @@ class TaskListViewModel: ObservableObject {
         editingItemId = selectedItemId
     }
     
-    func selectNextItem() {
-        // Cria uma lista plana com todos os items na ordem visual
-        let flatList = buildFlattenedList(items: items)
-        
-        // Encontra o índice do item atual
-        guard let currentFlatIndex = flatList.firstIndex(where: { $0.item.id == selectedItemId }) else {
-            // Se nenhum item selecionado, seleciona o primeiro
-            if !flatList.isEmpty {
-                selectedItemId = flatList[0].item.id
-            }
-            return
-        }
-        
-        // Seleciona o próximo item da lista plana
-        let nextIndex = min(currentFlatIndex + 1, flatList.count - 1)
-        selectedItemId = flatList[nextIndex].item.id
-    }
-
+    @MainActor
     func selectPreviousItem() {
         let flatList = buildFlattenedList(items: items)
-        
+            
         guard let currentFlatIndex = flatList.firstIndex(where: { $0.item.id == selectedItemId }) else {
             if !flatList.isEmpty {
-                selectedItemId = flatList[0].item.id
+                Task { @MainActor in
+                    selectedItemId = flatList[0].item.id
+                }
             }
             return
         }
-        
-        // Seleciona o item anterior da lista plana
+            
         let previousIndex = max(currentFlatIndex - 1, 0)
-        selectedItemId = flatList[previousIndex].item.id
+        Task { @MainActor in
+            selectedItemId = flatList[previousIndex].item.id
+        }
+    }
+
+    @MainActor
+    func selectNextItem() {
+        let flatList = buildFlattenedList(items: items)
+            
+        guard let currentFlatIndex = flatList.firstIndex(where: { $0.item.id == selectedItemId }) else {
+            if !flatList.isEmpty {
+                Task { @MainActor in
+                    selectedItemId = flatList[0].item.id
+                }
+            }
+            return
+        }
+            
+        let nextIndex = min(currentFlatIndex + 1, flatList.count - 1)
+        Task { @MainActor in
+            selectedItemId = flatList[nextIndex].item.id
+        }
     }
     
     func startEditingSelected() {

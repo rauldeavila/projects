@@ -346,20 +346,32 @@ struct TaskListView: View {
                 return .ignored
             }
             .onKeyPress(.upArrow) {
-                if viewModel.editingItemId == nil && !viewModel.isBreadcrumbFocused {  // Adicionado check do breadcrumb
-                    viewModel.selectPreviousItem()
-                    if let selectedId = viewModel.selectedItemId {
-                        proxy.scrollTo(selectedId, anchor: .center)
+                if viewModel.editingItemId == nil && !viewModel.isBreadcrumbFocused {
+                    Task { @MainActor in
+                        await viewModel.selectPreviousItem()
+                        if let selectedId = viewModel.selectedItemId {
+                            DispatchQueue.main.async {
+                                withAnimation {
+                                    proxy.scrollTo(selectedId, anchor: .center)
+                                }
+                            }
+                        }
                     }
                     return .handled
                 }
                 return .ignored
             }
             .onKeyPress(.downArrow) {
-                if viewModel.editingItemId == nil && !viewModel.isBreadcrumbFocused {  // Adicionado check do breadcrumb
-                    viewModel.selectNextItem()
-                    if let selectedId = viewModel.selectedItemId {
-                        proxy.scrollTo(selectedId, anchor: .center)
+                if viewModel.editingItemId == nil && !viewModel.isBreadcrumbFocused {
+                    Task { @MainActor in
+                        await viewModel.selectNextItem()
+                        if let selectedId = viewModel.selectedItemId {
+                            DispatchQueue.main.async {
+                                withAnimation {
+                                    proxy.scrollTo(selectedId, anchor: .center)
+                                }
+                            }
+                        }
                     }
                     return .handled
                 }
