@@ -8,6 +8,14 @@ class AppSettings: ObservableObject {
     private let customStatusKey = "customStatus"
     private let statusStyleKey = "statusStyle"
     
+    
+    private let zoomLevelKey = "zoomLevel"
+    @Published var zoomLevel: Double = 1.0 {
+        didSet {
+            UserDefaults.standard.set(zoomLevel, forKey: zoomLevelKey)
+        }
+    }
+    
     // Focus settings
     @Published var addItemsInFocusedLevel: Bool = false {
         didSet {
@@ -225,6 +233,11 @@ class AppSettings: ObservableObject {
         }
 
         inputBarShowBorder = UserDefaults.standard.bool(forKey: inputBarShowBorderKey)
+        
+        zoomLevel = UserDefaults.standard.double(forKey: zoomLevelKey)
+        if zoomLevel == 0 { // Se não houver valor salvo
+            zoomLevel = 1.0 // Valor padrão
+        }
     }
     
     // Métodos auxiliares para acessar status por categoria

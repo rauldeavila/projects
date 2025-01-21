@@ -6,7 +6,6 @@ struct TaskListView: View {
     @StateObject private var commandManager = CommandManager()
     @StateObject private var viewModel: TaskListViewModel
     @FocusState private var isNewItemFieldFocused: Bool
-    @SceneStorage("zoomLevel") private var zoomLevel: Double = 1.0
     
     @State private var shakePosition: CGFloat = 0
     
@@ -25,6 +24,11 @@ struct TaskListView: View {
         _settings = StateObject(wrappedValue: settings)
         _commandManager = StateObject(wrappedValue: commandManager)
         _viewModel = StateObject(wrappedValue: TaskListViewModel(settings: settings, commandManager: commandManager))
+    }
+    
+    var zoomLevel: Double {
+        get { settings.zoomLevel }
+        set { settings.zoomLevel = newValue }
     }
     
     var body: some View {
@@ -107,14 +111,14 @@ struct TaskListView: View {
                                 .frame(maxWidth: 0, maxHeight: 0)
                             
                             Button("") {
-                                zoomLevel = min(maxZoom, zoomLevel + zoomStep)
+                                settings.zoomLevel = min(maxZoom, settings.zoomLevel + zoomStep)
                             }
                             .keyboardShortcut(KeyboardShortcut("=", modifiers: .command))
                             .opacity(0)
                             .frame(maxWidth: 0, maxHeight: 0)
-                            
+
                             Button("") {
-                                zoomLevel = max(minZoom, zoomLevel - zoomStep)
+                                settings.zoomLevel = max(minZoom, settings.zoomLevel - zoomStep)
                             }
                             .keyboardShortcut(KeyboardShortcut("-", modifiers: .command))
                             .opacity(0)
