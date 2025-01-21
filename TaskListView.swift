@@ -21,8 +21,10 @@ struct TaskListView: View {
         
     init() {
         let settings = AppSettings()
+        let commandManager = CommandManager()
         _settings = StateObject(wrappedValue: settings)
-        _viewModel = StateObject(wrappedValue: TaskListViewModel(settings: settings))
+        _commandManager = StateObject(wrappedValue: commandManager)
+        _viewModel = StateObject(wrappedValue: TaskListViewModel(settings: settings, commandManager: commandManager))
     }
     
     var body: some View {
@@ -73,6 +75,9 @@ struct TaskListView: View {
                                     shakePosition = 0
                                     viewModel.shakeSelected = false
                                 }
+                            }
+                            .onChange(of: commandManager.showingLogbook) { isShowing in
+                                viewModel.toggleLogbook(isShowing)
                             }
                             .transition(.asymmetric(
                                 insertion: .move(edge: .top).combined(with: .opacity),
@@ -275,6 +280,20 @@ struct TaskListView: View {
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
                 }
+                
+                if viewModel.isInLogbookMode {
+                    VStack(spacing: 8) {
+                        // Bottom controls container
+                        HStack {
+                            Spacer()
+                            LogbookPeriodControl(viewModel: viewModel)
+                                .padding(.trailing, 16)
+                            LogbookTotalizer(viewModel: viewModel)
+                        }
+                        .padding(.horizontal)
+                        .padding(.bottom, 12)
+                    }
+                }
             }
             .background(Color(.textBackgroundColor))
             .onKeyPress(.leftArrow) {
@@ -392,6 +411,34 @@ struct ShakeEffect: GeometryEffect {
         return ProjectionTransform(CGAffineTransform(translationX: translation, y: 0))
     }
 }
+
+struct LogbookPeriodControl: View {
+    
+    @ObservedObject var viewModel: TaskListViewModel
+    
+    var body: some View {
+        Picker("Period", selection: $viewModel.logbookPeriod) {
+            Text("Day").tag(TaskListViewModel.LogbookPeriod.day)
+            Text("Week").tag(TaskListViewModel.LogbookPeriod.week)
+            Text("Month").tag(TaskListViewModel.LogbookPeriod.month)
+        }
+        .pickerStyle(.segmented)
+        .frame(width: 200)
+    }
+}
+
+// Componente para o totalizador
+struct LogbookTotalizer: View {
+    
+    @ObservedObject var viewModel: TaskListViewModel
+    
+    var body: some View {
+        Text("Total tasks completed in period: \(viewModel.getCurrentPeriodTaskCount())")
+            .foregroundColor(.secondary)
+            .font(.system(size: 12))
+    }
+}
+
 
 // Preview provider for SwiftUI canvas
 struct TaskListView_Previews: PreviewProvider {

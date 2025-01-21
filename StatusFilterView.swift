@@ -1,13 +1,27 @@
 import SwiftUI
 
+
 struct StatusFiltersView: View {
+    
     @ObservedObject var viewModel: TaskListViewModel
     @ObservedObject var settings: AppSettings
-    
+
     var body: some View {
         if viewModel.isInSearchMode {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
+                    // Logbook chip
+                    StatusFilterChip(
+                        status: ItemStatus.custom("📗 LOGBOOK", colorHex: "#00FF00"),
+                        isSelected: viewModel.isInLogbookMode,
+                        isHighlighted: viewModel.selectedChipIndex == 0,
+                        settings: settings
+                    ) {
+                        viewModel.selectedChipIndex = 0
+                        viewModel.confirmChipSelection()
+                    }
+                    
+                    // Existing status chips (adjust index to account for logbook)
                     ForEach(Array(settings.getStatus(for: .task).enumerated()), id: \.element.rawValue) { index, customStatus in
                         let itemStatus = ItemStatus.custom(
                             customStatus.rawValue,
@@ -18,17 +32,18 @@ struct StatusFiltersView: View {
                         StatusFilterChip(
                             status: itemStatus,
                             isSelected: viewModel.selectedStatusFilter?.rawValue == itemStatus.rawValue,
-                            isHighlighted: viewModel.selectedChipIndex == index,
+                            isHighlighted: viewModel.selectedChipIndex == index + 1,
                             settings: settings
                         ) {
-                            viewModel.toggleStatusFilter(itemStatus)
+                            viewModel.selectedChipIndex = index + 1
+                            viewModel.confirmChipSelection()
                         }
                     }
                 }
                 .padding(.horizontal, 8)
-                .padding(.vertical, 6) // Adicionei padding vertical
+                .padding(.vertical, 6)
             }
-            .frame(height: 44) // Aumentei de 32 para 44
+            .frame(height: 44)
             .background(settings.backgroundColor)
         }
     }

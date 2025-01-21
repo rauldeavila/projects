@@ -2,10 +2,11 @@ import SwiftUI
 
 /// Gerencia comandos digitados pelo usuário
 class CommandManager: ObservableObject {
-    /// Possíveis comandos
+
     enum Command: String, CaseIterable {
         case settings = "/settings"
         case status = "/status"
+        case logbook = "/logbook"
         
         var description: String {
             switch self {
@@ -13,6 +14,8 @@ class CommandManager: ObservableObject {
                 return "Settings menu"
             case .status:
                 return "Manage status syles and create new status"
+            case .logbook:
+                return "View completed tasks"
             }
         }
     }
@@ -35,6 +38,7 @@ class CommandManager: ObservableObject {
     @Published var state: State = .inactive
     @Published var showingSettings = false
     @Published var showingStatusSettings = false
+    @Published var showingLogbook = false
     
     /// Processa o texto digitado para identificar comandos
     func processInput(_ text: String) {
@@ -57,6 +61,8 @@ class CommandManager: ObservableObject {
             showingSettings = true
         case .status:
             showingStatusSettings = true
+        case .logbook:
+            showingLogbook = true
         }
     }
 }

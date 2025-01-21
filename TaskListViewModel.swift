@@ -11,7 +11,9 @@ struct FlattenedItem: Identifiable {
 class TaskListViewModel: ObservableObject {
 
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "projects", category: "view-model")
-
+    
+    @ObservedObject var commandManager: CommandManager
+    
     @Published private(set) var items: [Item] = []
     private var needsSave = false
     private var saveTask: Task<Void, Never>?
@@ -31,12 +33,28 @@ class TaskListViewModel: ObservableObject {
     @Published var selectedChipIndex: Int = -1
     @Published var searchText: String = ""
     
+    
+    @Published var isInLogbookMode = false
+    @Published var logbookPeriod: LogbookPeriod = .day
+    @Published var currentLogbookDate: Date = Date()
+    
     @ObservedObject var settings: AppSettings
     
     
-    init(settings: AppSettings) {
+    init(settings: AppSettings, commandManager: CommandManager) {
         self.settings = settings
+        self.commandManager = commandManager
         loadItems()
+    }
+    
+    enum LogbookPeriod {
+        case day
+        case week
+        case month
+    }
+    
+    func toggleLogbook(_ show: Bool) {
+        isInLogbookMode = show
     }
     
     func toggleStatusFilter(_ status: ItemStatus?) {
@@ -50,11 +68,13 @@ class TaskListViewModel: ObservableObject {
     private var textFilter: String {
         isInSearchMode ? searchText : ""
     }
-    
+
+    // Atualizar a função navigateChips
     func navigateChips(direction: Int) {
         guard isInSearchMode else { return }
         
-        let totalChips = settings.getStatus(for: .task).count
+        // +1 por causa do chip do logbook
+        let totalChips = settings.getStatus(for: .task).count + 1
         if totalChips == 0 { return }
         
         // Se não tem chip selecionado, começa do início
@@ -69,35 +89,44 @@ class TaskListViewModel: ObservableObject {
             selectedChipIndex = newIndex
         }
     }
-    
-    // Confirma seleção do chip atual
+
+    // Atualizar confirmChipSelection
     func confirmChipSelection() {
         guard isInSearchMode, selectedChipIndex >= 0 else { return }
         
-        let statuses = settings.getStatus(for: .task)
-        guard selectedChipIndex < statuses.count else { return }
+        // Se for o primeiro chip (logbook)
+        if selectedChipIndex == 0 {
+            toggleLogbook(true)
+            selectedStatusFilter = nil
+            return
+        }
         
-        let selectedStatus = statuses[selectedChipIndex]
+        // Para os outros chips, ajustar o índice (-1 por causa do logbook)
+        let statuses = settings.getStatus(for: .task)
+        let adjustedIndex = selectedChipIndex - 1
+        guard adjustedIndex < statuses.count else { return }
+        
+        let selectedStatus = statuses[adjustedIndex]
         let itemStatus = ItemStatus.custom(
             selectedStatus.rawValue,
             colorHex: selectedStatus.colorHex,
             customStatus: selectedStatus
         )
         
+        toggleLogbook(false)
         toggleStatusFilter(itemStatus)
     }
-    
-    // Entrar/sair do modo busca
+
+    // Atualizar toggleSearchMode
     func toggleSearchMode() {
         isInSearchMode.toggle()
         if isInSearchMode {
-            // Seleciona o primeiro chip ao entrar no modo busca
             selectedChipIndex = 0
         } else {
-            // Limpa estados de busca ao sair
             searchText = ""
             selectedChipIndex = -1
             selectedStatusFilter = nil
+            toggleLogbook(false) // Desativa o logbook ao sair do modo busca
         }
     }
     
@@ -778,7 +807,12 @@ class TaskListViewModel: ObservableObject {
     }
     
     func buildFlattenedList(items: [Item]) -> [FlattenedItem] {
-        // Se temos um item focado, mantemos a lógica atual
+
+        if isInLogbookMode {
+            let logbookTasks = getLogbookTasks()
+            return logbookTasks.map { FlattenedItem(item: $0, level: 0) }
+        }
+        
         if let focusedId = focusedItemId {
             return buildFocusedList(items: items, focusedId: focusedId)
         }
@@ -1189,6 +1223,85 @@ extension TaskListViewModel {
         if moveDown(in: &updatedItems) {
             items = updatedItems
             saveChanges()
+        }
+    }
+}
+
+extension TaskListViewModel {
+    // Função para obter tarefas do logbook filtradas por período
+    func getLogbookTasks() -> [Item] {
+        let doneTasks = getAllDoneTasks(from: items)
+        
+        return filterTasksByPeriod(tasks: doneTasks, date: currentLogbookDate, period: logbookPeriod)
+    }
+    
+    // Função recursiva para obter todas as tarefas DONE
+    private func getAllDoneTasks(from items: [Item]) -> [Item] {
+        var doneTasks: [Item] = []
+        
+        for item in items {
+            if item.status.isDone {
+                doneTasks.append(item)
+            }
+            
+            if let subItems = item.subItems {
+                doneTasks.append(contentsOf: getAllDoneTasks(from: subItems))
+            }
+        }
+        
+        return doneTasks
+    }
+    
+    // Função para filtrar tarefas por período
+    private func filterTasksByPeriod(tasks: [Item], date: Date, period: LogbookPeriod) -> [Item] {
+        let calendar = Calendar.current
+        
+        return tasks.filter { task in
+            guard let completedAt = task.completedAt else { return false }
+            
+            switch period {
+            case .day:
+                return calendar.isDate(completedAt, inSameDayAs: date)
+                
+            case .week:
+                let weekRange = calendar.dateInterval(of: .weekOfYear, for: date)
+                return weekRange?.contains(completedAt) ?? false
+                
+            case .month:
+                return calendar.isDate(completedAt, equalTo: date, toGranularity: .month)
+            }
+        }
+    }
+    
+    // Função para obter o total de tarefas no período atual
+    func getCurrentPeriodTaskCount() -> Int {
+        return getLogbookTasks().count
+    }
+    
+    // Funções para navegação entre períodos
+    func moveToNextPeriod() {
+        let calendar = Calendar.current
+        
+        switch logbookPeriod {
+        case .day:
+            currentLogbookDate = calendar.date(byAdding: .day, value: 1, to: currentLogbookDate) ?? currentLogbookDate
+        case .week:
+            currentLogbookDate = calendar.date(byAdding: .weekOfYear, value: 1, to: currentLogbookDate) ?? currentLogbookDate
+        case .month:
+            currentLogbookDate = calendar.date(byAdding: .month, value: 1, to: currentLogbookDate) ?? currentLogbookDate
+        }
+    }
+    
+    func moveToPreviousPeriod() {
+        let calendar = Calendar.current
+        
+        switch logbookPeriod {
+        case .day:
+            currentLogbookDate = calendar.date(byAdding: .day, value: -1, to: currentLogbookDate) ?? currentLogbookDate
+        case .week:
+            currentLogbookDate = calendar.date(byAdding: .weekOfYear, value: -1, to: currentLogbookDate) ?? currentLogbookDate
+        case .month:
+            currentLogbookDate = calendar.date(byAdding: .month, value: -1, to: currentLogbookDate) ?? currentLogbookDate
         }
     }
 }
